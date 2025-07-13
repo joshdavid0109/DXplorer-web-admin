@@ -375,7 +375,7 @@ const ToursManagement: React.FC = () => {
                   </div>
                 </div>
                 <div className="text-right">
-                  <span className="text-lg font-bold text-gray-900">₱{tour.price.toLocaleString()}</span>
+                  <span className="text-lg font-bold text-gray-900">₱{(tour.price || 0).toLocaleString()}</span>
                   <p className="text-xs text-gray-500">per person</p>
                 </div>
               </div>

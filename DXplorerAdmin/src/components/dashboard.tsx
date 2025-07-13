@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Calendar, DollarSign, MapPin, Users, Star, Eye, Edit3, Plus, Filter, BarChart3, PieChart, Globe, TrendingUp, Settings, Menu, X } from 'lucide-react';
+import { Calendar, DollarSign, MapPin, Users, Star, Eye, Edit3, Plus, Filter, BarChart3, PieChart, Globe, TrendingUp, Settings, Menu, X, LogOutIcon } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart as RechartsPieChart, Cell, Pie } from 'recharts';
 import ToursManagement  from './ToursManagement.tsx';
+import { supabase } from '../../lib/supabase';
 
 // Types
 interface BookingData {
@@ -64,7 +65,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onNavigate, activeIt
     { name: 'Tours', icon: MapPin, href: '/tours' },
     { name: 'Customers', icon: Users, href: '/customers' },
     { name: 'Analytics', icon: TrendingUp, href: '/analytics' },
-    { name: 'Settings', icon: Settings, href: '/settings' }
+    { name: 'Settings', icon: Settings, href: '/settings' },
+    { name: 'Log out', icon: LogOutIcon, href: '/logout'},
   ];
 
   const handleNavigation = (item: NavigationItem) => {
@@ -76,6 +78,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onNavigate, activeIt
     // Call parent navigation handler
     onNavigate(item.name);
   };
+  
 
   return (
     <>
@@ -154,9 +157,8 @@ const StatCard: React.FC<StatCardProps> = ({ title, value, change, icon: Icon, c
 const DashboardFilters: React.FC<{
   selectedPeriod: TimePeriod;
   onPeriodChange: (period: TimePeriod) => void;
-  onAddTour: () => void;
   onFilter: () => void;
-}> = ({ selectedPeriod, onPeriodChange, onAddTour, onFilter }) => {
+}> = ({ selectedPeriod, onPeriodChange, onFilter }) => {
   return (
     <div className="mb-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -171,13 +173,7 @@ const DashboardFilters: React.FC<{
             <option value="90d">Last 90 days</option>
             <option value="1y">Last year</option>
           </select>
-          <button 
-            onClick={onAddTour}
-            className="flex items-center space-x-2 px-4 py-2 bg-[#154689] text-white rounded-lg hover:bg-blue-600 transition-colors"
-          >
-            <Plus className="h-4 w-4" />
-            <span>Add Tour</span>
-          </button>
+
         </div>
         <button 
           onClick={onFilter}
@@ -424,6 +420,23 @@ const SettingsView: React.FC = () => (
   </div>
 );
 
+const LogOut: React.FC = () => {
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    console.log('User logged out');
+  };
+
+  return (
+    <button
+      onClick={handleLogout}
+      className="flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+    >
+      <LogOutIcon className="h-4 w-4" />
+      <span>Log Out</span>
+    </button>
+  );
+}
+
 // Main Dashboard Component
 const Dashboard: React.FC = () => {
   const [selectedPeriod, setSelectedPeriod] = useState<TimePeriod>('7d');
@@ -474,8 +487,6 @@ const Dashboard: React.FC = () => {
   const handlePeriodChange = (period: TimePeriod) => {
     setSelectedPeriod(period);
   };
-
-  const handleAddTour = () => console.log('Add tour clicked');
   const handleFilter = () => console.log('Filter clicked');
   const handleViewAll = () => {
     setCurrentView('Bookings');
@@ -514,6 +525,8 @@ const Dashboard: React.FC = () => {
         return <AnalyticsView />;
       case 'Settings':
         return <SettingsView />;
+      case 'Log out':
+        return <LogOut />;
       default:
         return (
           <>
@@ -521,7 +534,6 @@ const Dashboard: React.FC = () => {
             <DashboardFilters
               selectedPeriod={selectedPeriod}
               onPeriodChange={handlePeriodChange}
-              onAddTour={handleAddTour}
               onFilter={handleFilter}
             />
 
