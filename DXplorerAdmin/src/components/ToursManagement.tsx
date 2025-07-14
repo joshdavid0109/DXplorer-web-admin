@@ -911,9 +911,9 @@ const handleEditTour = (tour: Tour) => {
       {/* Add/Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] shadow-2xl flex flex-col">
+          <div className="bg-white rounded-2xl max-w-6xl w-full max-h-[90vh] shadow-2xl flex flex-col">
             {/* Modal Header - Fixed */}
-            <div className="bg-gradient-to-r from-[#154689] to-[#FAAD2B] p-6 text-white rounded-t-2xl flex-shrink-0">
+            <div className="bg-gradient-to-r bg-[#154689] p-6 text-white rounded-t-2xl flex-shrink-0">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-4">
                   <div className="p-3 bg-white/20 rounded-xl">
@@ -1370,9 +1370,9 @@ const handleEditTour = (tour: Tour) => {
       {/* View Modal */}
       {showViewModal && viewingTour && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] shadow-2xl flex flex-col">
+          <div className="bg-white rounded-2xl max-w-6xl w-full max-h-[90vh] shadow-2xl flex flex-col">
             {/* Modal Header */}
-            <div className="relative bg-gradient-to-r from-[#154689] to-[#FAAD2B] p-6 text-white">
+            <div className="relative bg-gradient-to-r bg-[#154689] p-6 text-white">
               <button
                 onClick={() => {
                   setShowViewModal(false);
