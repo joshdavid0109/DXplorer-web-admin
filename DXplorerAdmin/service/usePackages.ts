@@ -25,33 +25,25 @@ export const usePackages = () => {
     // Transform the data to ensure proper structure
     const transformedData = data.map(pkg => {
       console.log(`\n--- Processing package ${pkg.package_id} ---`)
-      console.log('Original package_details:', pkg.package_details)
       
-      // Ensure package_details is properly structured
       let packageDetails = pkg.package_details;
-      
-      // If package_details is an array, take the first element
       if (Array.isArray(packageDetails) && packageDetails.length > 0) {
         packageDetails = packageDetails[0];
       }
       
       const transformed = {
         ...pkg,
+        id: pkg.package_id, // ADD THIS LINE - map package_id to id
+        destination: pkg.destination || pkg.main_location || 'Unknown Location', // ADD THIS LINE
+        image_url: pkg.image_uri || pkg.image || '', // ADD THIS LINE
         package_details: packageDetails,
-        // Also ensure direct properties are available as fallback
         side_locations: pkg.side_locations || packageDetails?.side_locations || [],
         inclusions: pkg.inclusions || packageDetails?.inclusions || [],
         itinerary: pkg.itinerary || packageDetails?.itinerary || ''
       };
       
-      console.log('Transformed package_details:', transformed.package_details)
-      console.log('Side locations:', transformed.side_locations)
-      console.log('Inclusions:', transformed.inclusions)
-      console.log('Itinerary:', transformed.itinerary)
-      
       return transformed;
-    });
-    
+    });    
     setPackages(transformedData)
     console.log('=== usePackages: State updated with transformed data ===')
     
@@ -83,7 +75,7 @@ export const usePackages = () => {
       setError(null)
       const updatedPackage = await packagesService.updatePackage(id, packageData)
       setPackages(prev => prev.map(pkg =>
-        pkg.package_id === id ? updatedPackage : pkg
+        pkg.package_id === id ? { ...updatedPackage, id: updatedPackage.package_id } : pkg
       ))
       return updatedPackage
     } catch (err) {

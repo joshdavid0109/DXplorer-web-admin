@@ -332,45 +332,7 @@ const App = () => {
     <div className="min-h-screen bg-gray-50">
       {/* Header with user menu */}
       <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-2">
-              <Globe className="h-8 w-8 text-blue-600" />
-              <h1 className="text-xl font-bold text-gray-900">Your App</h1>
-            </div>
-            
-            {/* User Menu */}
-            <div className="relative user-menu-container">
-              <button
-                onClick={() => setShowUserMenu(!showUserMenu)}
-                className="flex items-center space-x-2 bg-gray-100 hover:bg-gray-200 px-3 py-2 rounded-md transition-colors"
-              >
-                <User className="h-5 w-5 text-gray-600" />
-                <span className="text-sm font-medium text-gray-700">
-                  {user.email}
-                </span>
-                <ChevronDown className="h-4 w-4 text-gray-500" />
-              </button>
-              
-              {/* Dropdown Menu */}
-              {showUserMenu && (
-                <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border">
-                  <div className="px-4 py-2 text-sm text-gray-700 border-b">
-                    Signed in as<br />
-                    <span className="font-medium">{user.email}</span>
-                  </div>
-                  <button
-                    onClick={handleLogout}
-                    className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
-                  >
-                    <LogOut className="h-4 w-4 mr-2" />
-                    Sign out
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+        
       </header>
 
       {/* Main Content */}

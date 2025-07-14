@@ -9,6 +9,7 @@ type PackageDetail = Database['public']['Tables']['package_details']['Row']
 
 // Extended package type with joined data
 export interface ExtendedPackage extends Package {
+  package_id: number
   available_dates: PackageDate[]
   package_details: PackageDetail | null
   itinerary: string | null
@@ -53,7 +54,8 @@ export const packagesService = {
             package_id,
             itinerary,
             side_locations,
-            inclusions
+            inclusions,
+            image_uri
           )
         `)
 
@@ -348,7 +350,6 @@ export const packagesService = {
       const { data: packageResult, error: packageError } = await supabase
         .from('packages')
         .update({
-          destination: packageData.destination,
           price: packageData.price,
           image_url: packageData.image_url,
           duration: packageData.duration,
