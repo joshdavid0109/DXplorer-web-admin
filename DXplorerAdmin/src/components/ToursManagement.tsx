@@ -20,7 +20,7 @@ type TourInsert = Database['public']['Tables']['packages']['Insert'];
 interface TourFormData {
   destination: string;
   price: number;
-  image_url: string;
+  image_url: '';
   itinerary: string;
   side_locations: string[];
   inclusions: string[];
@@ -29,7 +29,6 @@ interface TourFormData {
   nights: number;
   status: 'active' | 'inactive' | 'archived';
   tour_type: 'Domestic' | 'International';
-  image_uri?: string; // Optional field for image URI
 }
 
 const ToursManagement: React.FC = () => {
@@ -378,13 +377,13 @@ const getImageUrl = (tour: Tour) => {
     console.log('Getting image URL for tour:', tour);
 
     // First, check if package_details exists
-    if (tour.package_details && tour.package_details.image_uri) {
-      return tour.package_details.image_uri;
+    if (tour.package_details && tour.package_details.image_url) {
+      return tour.package_details.image_url;
     }
 
-    // Fallback to top-level image_uri or image (though they appear empty in your example)
-    if (tour.image_uri) {
-        return tour.image_uri;
+    // Fallback to top-level image_url or image (though they appear empty in your example)
+    if (tour.image_url) {
+        return tour.image_url;
     }
 
     if (tour.image) {
@@ -1320,7 +1319,7 @@ const handleEditTour = (tour: Tour) => {
                       onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
                       className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
                     >
-                      <option value="archived">archived - Not visible to customers</option>
+                      <option value="archived">Draft - Not visible to customers</option>
                       <option value="active">active - Available for booking</option>
                       <option value="inactive">inactive - Not available for booking</option>
                     </select>

@@ -1,54 +1,10 @@
+// App.js
 import React, { useState, useEffect } from 'react';
-import { LogOut, User, Globe, ChevronDown } from 'lucide-react';
+import { Globe } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 import Dashboard from './dashboard';
 
-// Simple Dashboard Component
-// Persistent storage manager
-const AuthStorage = {
-  _storage: new Map(),
-  
-  setItem: (key, value) => {
-    AuthStorage._storage.set(key, JSON.stringify(value));
-    // Also try to use sessionStorage if available (for actual browser use)
-    try {
-      if (typeof window !== 'undefined' && window.sessionStorage) {
-        window.sessionStorage.setItem(key, JSON.stringify(value));
-      }
-    } catch (e) {
-      // Fallback to memory storage if sessionStorage fails
-    }
-  },
-  
-  getItem: (key) => {
-    // First try sessionStorage if available
-    try {
-      if (typeof window !== 'undefined' && window.sessionStorage) {
-        const item = window.sessionStorage.getItem(key);
-        if (item) return JSON.parse(item);
-      }
-    } catch (e) {
-      // Fall back to memory storage
-    }
-    
-    // Fallback to memory storage
-    const item = AuthStorage._storage.get(key);
-    return item ? JSON.parse(item) : null;
-  },
-  
-  removeItem: (key) => {
-    AuthStorage._storage.delete(key);
-    try {
-      if (typeof window !== 'undefined' && window.sessionStorage) {
-        window.sessionStorage.removeItem(key);
-      }
-    } catch (e) {
-      // Ignore errors
-    }
-  }
-};
-
-// Email and Password Auth Component
-const AuthComponent = ({ onAuthSuccess }) => {
+const AuthComponent = () => {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -60,7 +16,6 @@ const AuthComponent = ({ onAuthSuccess }) => {
     setError('');
     setLoading(true);
 
-    // Basic validation
     if (!email || !password) {
       setError('Please fill in all fields');
       setLoading(false);
@@ -79,20 +34,16 @@ const AuthComponent = ({ onAuthSuccess }) => {
       return;
     }
 
-    // Simulate API call
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Mock success - in real app, you'd call your auth service
-      const userData = { 
-        id: 1, 
-        email: email,
-        created_at: new Date().toISOString()
-      };
-      
-      onAuthSuccess(userData);
+      if (isLogin) {
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.auth.signUp({ email, password });
+        if (error) throw error;
+      }
     } catch (err) {
-      setError('Authentication failed. Please try again.');
+      setError(err.message || 'Authentication failed');
     } finally {
       setLoading(false);
     }
@@ -102,14 +53,12 @@ const AuthComponent = ({ onAuthSuccess }) => {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
         <div className="bg-white rounded-xl shadow-lg p-8">
-          {/* Header */}
           <div className="text-center">
-            <Globe className="mx-auto h-12 w-12 text-blue-600" />
+            <img src="../src/assets/logo.png" alt="Logo" className="mx-auto h-13 w-50 mb-4" />
             <h2 className="mt-6 text-3xl font-extrabold text-gray-900">
-              {isLogin ? 'Sign in to your account' : 'Create your account'}
+              {`Admin`}
             </h2>
             <p className="mt-2 text-sm text-gray-600">
-              {isLogin ? "Don't have an account?" : "Already have an account?"}
               <button
                 type="button"
                 onClick={() => {
@@ -119,14 +68,12 @@ const AuthComponent = ({ onAuthSuccess }) => {
                   setPassword('');
                   setConfirmPassword('');
                 }}
-                className="ml-1 font-medium text-blue-600 hover:text-blue-500 transition-colors"
+                className="ml-1 font-medium text-blue-600 hover:text-blue-500"
               >
-                {isLogin ? 'Sign up' : 'Sign in'}
               </button>
             </p>
           </div>
 
-          {/* Form */}
           <div className="mt-8 space-y-6">
             {error && (
               <div className="bg-red-50 border border-red-200 rounded-md p-4">
@@ -136,99 +83,57 @@ const AuthComponent = ({ onAuthSuccess }) => {
 
             <div className="space-y-4">
               <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                  Email address
-                </label>
+                <label className="block text-sm font-medium text-gray-700">Email address</label>
                 <input
-                  id="email"
-                  name="email"
                   type="email"
-                  autoComplete="email"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="mt-1 block w-full px-3 py-2 border rounded-md shadow-sm"
                   placeholder="Enter your email"
                 />
               </div>
 
               <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                  Password
-                </label>
+                <label className="block text-sm font-medium text-gray-700">Password</label>
                 <input
-                  id="password"
-                  name="password"
                   type="password"
-                  autoComplete={isLogin ? "current-password" : "new-password"}
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="mt-1 block w-full px-3 py-2 border rounded-md shadow-sm"
                   placeholder="Enter your password"
                 />
               </div>
 
               {!isLogin && (
                 <div>
-                  <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
-                    Confirm Password
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700">Confirm Password</label>
                   <input
-                    id="confirmPassword"
-                    name="confirmPassword"
                     type="password"
-                    autoComplete="new-password"
                     required
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    className="mt-1 block w-full px-3 py-2 border rounded-md shadow-sm"
                     placeholder="Confirm your password"
                   />
                 </div>
               )}
             </div>
 
-            {isLogin && (
-              <div className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <input
-                    id="remember-me"
-                    name="remember-me"
-                    type="checkbox"
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  />
-                  <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-900">
-                    Remember me
-                  </label>
-                </div>
-
-                <div className="text-sm">
-                  <button
-                    type="button"
-                    className="font-medium text-blue-600 hover:text-blue-500 transition-colors"
-                  >
-                    Forgot your password?
-                  </button>
-                </div>
-              </div>
-            )}
-
             <div>
               <button
-                type="button"
                 onClick={handleSubmit}
                 disabled={loading}
-                className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="w-full py-2 px-4 text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
               >
-                {loading ? (
-                  <div className="flex items-center">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                    {isLogin ? 'Signing in...' : 'Creating account...'}
-                  </div>
-                ) : (
-                  isLogin ? 'Sign in' : 'Create account'
-                )}
+                {loading
+                  ? isLogin
+                    ? 'Signing in...'
+                    : 'Creating account...'
+                  : isLogin
+                  ? 'Sign in'
+                  : 'Create account'}
               </button>
             </div>
           </div>
@@ -238,82 +143,41 @@ const AuthComponent = ({ onAuthSuccess }) => {
   );
 };
 
-// Mock Supabase client with persistent storage
-const supabase = {
-  auth: {
-    getUser: async () => {
-      const user = AuthStorage.getItem('currentUser');
-      return { data: { user } };
-    },
-    onAuthStateChange: (callback) => {
-      return { data: { subscription: { unsubscribe: () => {} } } };
-    },
-    signOut: async () => {
-      AuthStorage.removeItem('currentUser');
-    }
-  }
-};
-
 const App = () => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [showUserMenu, setShowUserMenu] = useState(false);
 
-  // Check authentication state on app load
   useEffect(() => {
     const checkAuth = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      setUser(user);
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      setUser(session?.user || null);
       setLoading(false);
     };
 
     checkAuth();
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
+      (_event, session) => {
         setUser(session?.user || null);
         setLoading(false);
       }
     );
 
-    return () => subscription.unsubscribe();
-  }, []);
-
-  // Close user menu when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      const target = event.target;
-      if (!target.closest('.user-menu-container')) {
-        setShowUserMenu(false);
-      }
-    };
-
-    if (showUserMenu) {
-      document.addEventListener('click', handleClickOutside);
-    }
-
     return () => {
-      document.removeEventListener('click', handleClickOutside);
+      subscription.unsubscribe();
     };
-  }, [showUserMenu]);
-
-  const handleAuthSuccess = (authenticatedUser) => {
-    // Store user data persistently
-    AuthStorage.setItem('currentUser', authenticatedUser);
-    setUser(authenticatedUser);
-  };
+  }, []);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
     setUser(null);
-    setShowUserMenu(false);
   };
 
-  // Show loading spinner while checking auth
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="flex items-center space-x-3">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
           <span className="text-gray-600">Loading...</span>
@@ -322,22 +186,14 @@ const App = () => {
     );
   }
 
-  // Show auth component if user is not authenticated
   if (!user) {
-    return <AuthComponent onAuthSuccess={handleAuthSuccess} />;
+    return <AuthComponent />;
   }
 
-  // Show dashboard with user menu and header if authenticated
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header with user menu */}
-      <header className="bg-white shadow-sm border-b">
-        
-      </header>
-
-      {/* Main Content */}
       <main className="flex-1">
-        <Dashboard user={user} />
+        <Dashboard user={user} handleLogout={handleLogout} />
       </main>
     </div>
   );

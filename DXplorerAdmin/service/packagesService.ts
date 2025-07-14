@@ -26,6 +26,7 @@ export const packagesService = {
         .from('package_details')
         .select('*')
         .limit(5)
+        
       
       console.log('Test package_details data:', testDetails)
       console.log('Test error:', testError)
@@ -55,7 +56,7 @@ export const packagesService = {
             itinerary,
             side_locations,
             inclusions,
-            image_uri
+            image_url
           )
         `)
 
@@ -280,7 +281,7 @@ export const packagesService = {
       if (packageData.available_dates && packageData.available_dates.length > 0) {
         const dateInserts = packageData.available_dates.map((date: any) => ({
           package_id: packageResult.package_id,
-          available_date: date // Store the entire date object as JSONB
+          available_Date: date // Store the entire date object as JSONB
         }))
 
         const { error: datesError } = await supabase
@@ -344,114 +345,134 @@ export const packagesService = {
   },
 
   // Update a package with related data
-  updatePackage: async (id: number, packageData: any): Promise<ExtendedPackage> => {
-    try {
-      // Update main package
-      const { data: packageResult, error: packageError } = await supabase
-        .from('packages')
-        .update({
-          price: packageData.price,
-          image_url: packageData.image_url,
-          duration: packageData.duration,
-          nights: packageData.nights,
-          status: packageData.status,
-          tour_type: packageData.tour_type
-        })
-        .eq('package_id', id)
-        .select()
-        .single()
-      
-      if (packageError) {
-        console.error('Package update error:', packageError)
-        throw new Error(`Failed to update package: ${packageError.message}`)
+updatePackage: async (id: number, packageData: any): Promise<ExtendedPackage> => {
+  try {
+    // 1. Fetch current data
+    const { data: currentData, error: currentError } = await supabase
+      .from('packages')
+      .select(`
+        *,
+        package_details (
+          detail_id,
+          itinerary,
+          side_locations,
+          inclusions,
+          image_url
+        ),
+        package_dates (
+          available_Date
+        )
+      `)
+      .eq('package_id', id)
+      .single();
+
+    if (currentError) throw new Error(`Failed to fetch current package: ${currentError.message}`);
+
+    // 2. Check and update only changed fields (packages table)
+    const updates: any = {};
+    const fieldsToCheck = ['price', 'duration', 'nights', 'status', 'tour_type'];
+    for (const field of fieldsToCheck) {
+      if (packageData[field] !== undefined && packageData[field] !== currentData[field]) {
+        updates[field] = packageData[field];
       }
-
-      // Update or create package details
-      if (packageData.itinerary || packageData.side_locations || packageData.inclusions) {
-        const { error: detailsError } = await supabase
-          .from('package_details')
-          .upsert({
-            package_id: id,
-            itinerary: packageData.itinerary || '',
-            side_locations: packageData.side_locations || [],
-            inclusions: packageData.inclusions || []
-          })
-        
-        if (detailsError) {
-          console.error('Package details update error:', detailsError)
-        }
-      }
-
-      // Delete existing dates and create new ones
-      await supabase
-        .from('package_dates')
-        .delete()
-        .eq('package_id', id)
-
-      if (packageData.available_dates && packageData.available_dates.length > 0) {
-        const dateInserts = packageData.available_dates.map((date: any) => ({
-          package_id: id,
-          available_date: date
-        }))
-
-        const { error: datesError } = await supabase
-          .from('package_dates')
-          .insert(dateInserts)
-        
-        if (datesError) {
-          console.error('Package dates update error:', datesError)
-        }
-      }
-
-      // Fetch the complete updated package
-      const { data: completePackage, error: fetchError } = await supabase
-        .from('packages')
-        .select(`
-          *,
-          package_dates (
-            date_id,
-            package_id,
-            available_Date
-          ),
-          package_details (
-            detail_id,
-            package_id,
-            itinerary,
-            side_locations,
-            inclusions
-          )
-        `)
-        .eq('package_id', id)
-        .single()
-
-      if (fetchError) {
-        console.error('Fetch updated package error:', fetchError)
-        throw new Error(`Failed to fetch updated package: ${fetchError.message}`)
-      }
-
-      // Transform the joined data properly - handle both array and object formats
-      let packageDetails = null
-      if (completePackage.package_details) {
-        if (Array.isArray(completePackage.package_details) && completePackage.package_details.length > 0) {
-          packageDetails = completePackage.package_details[0]
-        } else if (typeof completePackage.package_details === 'object' && completePackage.package_details.detail_id) {
-          packageDetails = completePackage.package_details
-        }
-      }
-
-      return {
-        ...completePackage,
-        available_dates: Array.isArray(completePackage.package_dates) ? completePackage.package_dates : [],
-        package_details: packageDetails,
-        itinerary: packageDetails?.itinerary || null,
-        side_locations: packageDetails?.side_locations || null,
-        inclusions: packageDetails?.inclusions || null
-      }
-    } catch (error) {
-      console.error('Service error:', error)
-      throw error
     }
-  },
+
+    if (Object.keys(updates).length > 0) {
+      const { error: packageError } = await supabase
+        .from('packages')
+        .update(updates)
+        .eq('package_id', id);
+
+      if (packageError) throw new Error(`Failed to update package: ${packageError.message}`);
+    }
+
+    // 3. Update package_details only if changed
+    const currentDetails = currentData.package_details || {};
+    const detailUpdates: any = {};
+
+    if (packageData.itinerary !== undefined && packageData.itinerary !== currentDetails.itinerary) {
+      detailUpdates.itinerary = packageData.itinerary;
+    }
+
+    if (packageData.side_locations && JSON.stringify(packageData.side_locations) !== JSON.stringify(currentDetails.side_locations)) {
+      detailUpdates.side_locations = packageData.side_locations;
+    }
+
+    if (packageData.inclusions && JSON.stringify(packageData.inclusions) !== JSON.stringify(currentDetails.inclusions)) {
+      detailUpdates.inclusions = packageData.inclusions;
+    }
+
+    if (packageData.image_url !== undefined && packageData.image_url !== currentDetails.image_url) {
+      detailUpdates.image_url = packageData.image_url;
+    }
+
+    if (Object.keys(detailUpdates).length > 0 || !currentData.package_details) {
+      detailUpdates.package_id = id;
+
+      const { error: detailsError } = await supabase
+        .from('package_details')
+        .upsert(detailUpdates, { onConflict: ['package_id'] });
+
+      if (detailsError) throw new Error(`Failed to update package details: ${detailsError.message}`);
+    }
+
+    // 4. Update package_dates only if changed
+    const existingDates = currentData.package_dates?.map((d: any) => d.available_Date) || [];
+    const newDates = packageData.available_dates || [];
+    const datesChanged = JSON.stringify([...existingDates].sort()) !== JSON.stringify([...newDates].sort());
+
+    if (datesChanged) {
+      await supabase.from('package_dates').delete().eq('package_id', id);
+
+      if (newDates.length > 0) {
+        const inserts = newDates.map((date: any) => ({
+          package_id: id,
+          available_Date: date
+        }));
+
+        const { error: insertError } = await supabase.from('package_dates').insert(inserts);
+        if (insertError) throw new Error(`Failed to update package dates: ${insertError.message}`);
+      }
+    }
+
+    // 5. Fetch and return updated package
+    const { data: finalData, error: fetchError } = await supabase
+      .from('packages')
+      .select(`
+        *,
+        package_dates (
+          date_id,
+          available_Date
+        ),
+        package_details (
+          detail_id,
+          itinerary,
+          side_locations,
+          inclusions,
+          image_url
+        )
+      `)
+      .eq('package_id', id)
+      .single();
+
+    if (fetchError) throw new Error(`Failed to fetch updated package: ${fetchError.message}`);
+
+    const details = finalData.package_details || {};
+    return {
+      ...finalData,
+      available_dates: finalData.package_dates || [],
+      itinerary: details.itinerary || '',
+      side_locations: details.side_locations || [],
+      inclusions: details.inclusions || [],
+      image_url: details.image_url || '',
+      package_details: details
+    };
+
+  } catch (error) {
+    console.error('Service error:', error);
+    throw error;
+  }
+},
 
   // Delete a package and related data
   deletePackage: async (id: number): Promise<void> => {
