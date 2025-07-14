@@ -11,19 +11,58 @@ export const usePackages = () => {
   const [error, setError] = useState<string | null>(null)
 
   const fetchPackages = async () => {
-    try {
-      setLoading(true)
-      setError(null)
-      const data = await packagesService.getPackages()
-      setPackages(data)
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch packages'
-      setError(errorMessage)
-      console.error('Fetch packages error:', err)
-    } finally {
-      setLoading(false)
-    }
+  try {
+    setLoading(true)
+    setError(null)
+    
+    console.log('=== usePackages: Starting fetch ===')
+    const data = await packagesService.getPackages()
+    
+    console.log('=== usePackages: Received data ===')
+    console.log('Data length:', data.length)
+    console.log('Raw data from service:', JSON.stringify(data, null, 2))
+    
+    // Transform the data to ensure proper structure
+    const transformedData = data.map(pkg => {
+      console.log(`\n--- Processing package ${pkg.package_id} ---`)
+      console.log('Original package_details:', pkg.package_details)
+      
+      // Ensure package_details is properly structured
+      let packageDetails = pkg.package_details;
+      
+      // If package_details is an array, take the first element
+      if (Array.isArray(packageDetails) && packageDetails.length > 0) {
+        packageDetails = packageDetails[0];
+      }
+      
+      const transformed = {
+        ...pkg,
+        package_details: packageDetails,
+        // Also ensure direct properties are available as fallback
+        side_locations: pkg.side_locations || packageDetails?.side_locations || [],
+        inclusions: pkg.inclusions || packageDetails?.inclusions || [],
+        itinerary: pkg.itinerary || packageDetails?.itinerary || ''
+      };
+      
+      console.log('Transformed package_details:', transformed.package_details)
+      console.log('Side locations:', transformed.side_locations)
+      console.log('Inclusions:', transformed.inclusions)
+      console.log('Itinerary:', transformed.itinerary)
+      
+      return transformed;
+    });
+    
+    setPackages(transformedData)
+    console.log('=== usePackages: State updated with transformed data ===')
+    
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : 'Failed to fetch packages'
+    setError(errorMessage)
+    console.error('Fetch packages error:', err)
+  } finally {
+    setLoading(false)
   }
+}
 
   const createPackage = async (packageData: any) => {
     try {
@@ -43,8 +82,8 @@ export const usePackages = () => {
     try {
       setError(null)
       const updatedPackage = await packagesService.updatePackage(id, packageData)
-      setPackages(prev => prev.map(pkg => 
-        pkg.id === id ? updatedPackage : pkg
+      setPackages(prev => prev.map(pkg =>
+        pkg.package_id === id ? updatedPackage : pkg
       ))
       return updatedPackage
     } catch (err) {
@@ -59,7 +98,7 @@ export const usePackages = () => {
     try {
       setError(null)
       await packagesService.deletePackage(id)
-      setPackages(prev => prev.filter(pkg => pkg.id !== id))
+      setPackages(prev => prev.filter(pkg => pkg.package_id !== id))
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to delete package'
       setError(errorMessage)

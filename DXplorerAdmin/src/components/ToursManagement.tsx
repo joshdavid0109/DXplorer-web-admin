@@ -280,16 +280,31 @@ const getAvailableDates = (tour: Tour) => {
 
   // Helper function to get side locations
   const getSideLocations = (tour: Tour) => {
+    // Handle array format
+    if (Array.isArray(tour.package_details) && tour.package_details.length > 0) {
+      return tour.package_details[0].side_locations || [];
+    }
+    // Handle object format (fallback)
     return tour.package_details?.side_locations || tour.side_locations || [];
   };
 
   // Helper function to get inclusions
   const getInclusions = (tour: Tour) => {
+    // Handle array format
+    if (Array.isArray(tour.package_details) && tour.package_details.length > 0) {
+      return tour.package_details[0].inclusions || [];
+    }
+    // Handle object format (fallback)
     return tour.package_details?.inclusions || tour.inclusions || [];
   };
 
   // Helper function to get itinerary
   const getItinerary = (tour: Tour) => {
+    // Handle array format
+    if (Array.isArray(tour.package_details) && tour.package_details.length > 0) {
+      return tour.package_details[0].itinerary || '';
+    }
+    // Handle object format (fallback)
     return tour.package_details?.itinerary || tour.itinerary || '';
   };
 
@@ -300,12 +315,6 @@ const getAvailableDates = (tour: Tour) => {
 
   return (
     <div className="space-y-6">
-
-      {/* Add this debugging section temporarily */}
-      <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded">
-        <h4>Debug Info:</h4>
-        <pre className="text-xs">{JSON.stringify(viewingTour, null, 2)}</pre>
-      </div>
       {/* Header */}
       <div className="flex flex-col rounded-2xl p-6 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -705,8 +714,7 @@ const getAvailableDates = (tour: Tour) => {
                     <h4 className="text-xl font-semibold mb-2">{getDestination(viewingTour)}</h4>
                     <div className="space-y-2">
                       <div className="flex items-center space-x-2">
-                        <DollarSign className="h-4 w-4 text-gray-500" />
-                        <span className="text-lg font-bold">₱{(viewingTour.price || 0).toLocaleString()}</span>
+                      <span className="text-lg font-bold">₱{(viewingTour.price || 0).toLocaleString()}</span>
                         <span className="text-gray-500">per pax</span>
                       </div>
                       <div className="flex items-center space-x-2">
