@@ -17,6 +17,35 @@ export interface ExtendedPackage extends Package {
   inclusions: any[] | null
 }
 
+const getCountryCodeFromAPI = async (destination: string): Promise<string> => {
+  try {
+    let searchTerm = destination.toLowerCase().trim();
+    
+    // Handle "City, Country" format
+    if (searchTerm.includes(',')) {
+      const parts = searchTerm.split(',').map(part => part.trim());
+      // Use the last part as country (e.g., "Bohol, Philippines" → "Philippines")
+      searchTerm = parts[parts.length - 1];
+    }
+    
+    // Try to get country info from REST Countries API
+    const response = await fetch(`https://restcountries.com/v3.1/name/${searchTerm}?fields=cca3`);
+    if (response.ok) {
+      const data = await response.json();
+      if (data && data[0]?.cca3) {
+        console.log(`Country code for "${destination}" is ${data[0].cca3}`);
+        return data[0].cca3; // Returns 3-letter ISO code
+      }
+    }
+  } catch (error) {
+    console.log('API lookup failed, using fallback');
+  }
+  
+  // Fallback to first 3 letters if API fails
+  return destination.substring(0, 3).toUpperCase();
+};
+
+
 export const packagesService = {
   // Get all packages with related data
   getPackages: async (): Promise<ExtendedPackage[]> => {
@@ -237,21 +266,27 @@ export const packagesService = {
   // Create a new package with related data
   createPackage: async (packageData: any): Promise<ExtendedPackage> => {
     try {
+      const countryCode = await getCountryCodeFromAPI(packageData.destination);
+
+      const generatedPackageId =
+        packageData.destination.substring(0, 3).toUpperCase() +
+        countryCode +
+        packageData.duration +
+        packageData.nights;
+
       // First create the main package
       const { data: packageResult, error: packageError } = await supabase
         .from('packages')
         .insert([{
-          destination: packageData.destination,
-          price: packageData.price,
-          image_url: packageData.image_url,
+          package_id: generatedPackageId, // Assuming you have a function to generate unique IDs
+          main_location: packageData.destination, // Updated column name
           duration: packageData.duration,
           nights: packageData.nights,
+          price: packageData.price,
+          total_slots: packageData.total_slots,
           status: packageData.status,
-          tour_type: packageData.tour_type,
-          rating: 0,
-          bookings: 0,
-          revenue: 0
-        }])
+          tour_type: packageData.tour_type
+      }])
         .select()
         .single()
       
@@ -268,7 +303,8 @@ export const packagesService = {
             package_id: packageResult.package_id,
             itinerary: packageData.itinerary || '',
             side_locations: packageData.side_locations || [],
-            inclusions: packageData.inclusions || []
+            inclusions: packageData.inclusions || [],
+            image_url: packageData.image_url || null // Move image_url to package_details
           }])
         
         if (detailsError) {
@@ -281,7 +317,7 @@ export const packagesService = {
       if (packageData.available_dates && packageData.available_dates.length > 0) {
         const dateInserts = packageData.available_dates.map((date: any) => ({
           package_id: packageResult.package_id,
-          available_Date: date // Store the entire date object as JSONB
+          available_Date: Array.isArray(date) ? date : [date] // Store the entire date object as JSONB
         }))
 
         const { error: datesError } = await supabase
@@ -344,7 +380,6 @@ export const packagesService = {
     }
   },
 
-  // Update a package with related data
 updatePackage: async (id: number, packageData: any): Promise<ExtendedPackage> => {
   try {
     // 1. Fetch current data
@@ -360,78 +395,102 @@ updatePackage: async (id: number, packageData: any): Promise<ExtendedPackage> =>
           image_url
         ),
         package_dates (
+          date_id,
           available_Date
         )
       `)
       .eq('package_id', id)
       .single();
-
     if (currentError) throw new Error(`Failed to fetch current package: ${currentError.message}`);
 
     // 2. Check and update only changed fields (packages table)
     const updates: any = {};
-    const fieldsToCheck = ['price', 'duration', 'nights', 'status', 'tour_type'];
+    const fieldsToCheck = ['main_location', 'price', 'duration', 'nights', 'status', 'tour_type'];
     for (const field of fieldsToCheck) {
       if (packageData[field] !== undefined && packageData[field] !== currentData[field]) {
         updates[field] = packageData[field];
+        console.log(`Field ${field} changed from ${currentData[field]} to ${packageData[field]}`);
       }
     }
-
     if (Object.keys(updates).length > 0) {
       const { error: packageError } = await supabase
         .from('packages')
         .update(updates)
         .eq('package_id', id);
-
       if (packageError) throw new Error(`Failed to update package: ${packageError.message}`);
     }
 
     // 3. Update package_details only if changed
     const currentDetails = currentData.package_details || {};
     const detailUpdates: any = {};
-
     if (packageData.itinerary !== undefined && packageData.itinerary !== currentDetails.itinerary) {
       detailUpdates.itinerary = packageData.itinerary;
     }
-
     if (packageData.side_locations && JSON.stringify(packageData.side_locations) !== JSON.stringify(currentDetails.side_locations)) {
       detailUpdates.side_locations = packageData.side_locations;
     }
-
     if (packageData.inclusions && JSON.stringify(packageData.inclusions) !== JSON.stringify(currentDetails.inclusions)) {
       detailUpdates.inclusions = packageData.inclusions;
     }
-
     if (packageData.image_url !== undefined && packageData.image_url !== currentDetails.image_url) {
       detailUpdates.image_url = packageData.image_url;
     }
-
     if (Object.keys(detailUpdates).length > 0 || !currentData.package_details) {
       detailUpdates.package_id = id;
-
       const { error: detailsError } = await supabase
         .from('package_details')
         .upsert(detailUpdates, { onConflict: ['package_id'] });
-
       if (detailsError) throw new Error(`Failed to update package details: ${detailsError.message}`);
     }
 
-    // 4. Update package_dates only if changed
-    const existingDates = currentData.package_dates?.map((d: any) => d.available_Date) || [];
-    const newDates = packageData.available_dates || [];
-    const datesChanged = JSON.stringify([...existingDates].sort()) !== JSON.stringify([...newDates].sort());
-
-    if (datesChanged) {
-      await supabase.from('package_dates').delete().eq('package_id', id);
-
-      if (newDates.length > 0) {
-        const inserts = newDates.map((date: any) => ({
-          package_id: id,
-          available_Date: date
-        }));
-
-        const { error: insertError } = await supabase.from('package_dates').insert(inserts);
-        if (insertError) throw new Error(`Failed to update package dates: ${insertError.message}`);
+    // 4. Update package_dates - handle both additions and deletions
+    const newDates = packageData.available_dates;
+    if (newDates !== undefined) { // Only update if available_dates is provided
+      const currentPackageDates = currentData.package_dates;
+      
+      if (currentPackageDates && currentPackageDates.length > 0) {
+        // If package_dates row exists, compare and update the entire array
+        const currentDateRow = currentPackageDates[0]; // Assuming one row per package
+        const existingDates = currentDateRow.available_Date || [];
+        
+        // Normalize dates for comparison
+        const normalizeDate = (date: any) => typeof date === 'string' ? date : JSON.stringify(date);
+        const existingDateStrings = existingDates.map(normalizeDate);
+        const newDateStrings = newDates.map(normalizeDate);
+        
+        // Check if arrays are different (either different length or different content)
+        const arraysAreDifferent = existingDateStrings.length !== newDateStrings.length ||
+          !existingDateStrings.every(date => newDateStrings.includes(date)) ||
+          !newDateStrings.every(date => existingDateStrings.includes(date));
+        
+        if (arraysAreDifferent) {
+          if (newDates.length === 0) {
+            // If new dates array is empty, delete the package_dates row
+            const { error: deleteError } = await supabase
+              .from('package_dates')
+              .delete()
+              .eq('package_id', id);
+            if (deleteError) throw new Error(`Failed to delete package dates: ${deleteError.message}`);
+          } else {
+            // Update with the new dates array (this handles both additions and deletions)
+            const { error: updateError } = await supabase
+              .from('package_dates')
+              .update({ available_Date: newDates })
+              .eq('package_id', id);
+            if (updateError) throw new Error(`Failed to update package dates: ${updateError.message}`);
+          }
+        }
+      } else {
+        // If no package_dates row exists and we have new dates, create new one
+        if (newDates.length > 0) {
+          const { error: insertError } = await supabase
+            .from('package_dates')
+            .insert({
+              package_id: id,
+              available_Date: newDates
+            });
+          if (insertError) throw new Error(`Failed to insert new package dates: ${insertError.message}`);
+        }
       }
     }
 
@@ -454,7 +513,6 @@ updatePackage: async (id: number, packageData: any): Promise<ExtendedPackage> =>
       `)
       .eq('package_id', id)
       .single();
-
     if (fetchError) throw new Error(`Failed to fetch updated package: ${fetchError.message}`);
 
     const details = finalData.package_details || {};
@@ -467,7 +525,6 @@ updatePackage: async (id: number, packageData: any): Promise<ExtendedPackage> =>
       image_url: details.image_url || '',
       package_details: details
     };
-
   } catch (error) {
     console.error('Service error:', error);
     throw error;

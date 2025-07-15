@@ -3,6 +3,7 @@ import { Calendar, DollarSign, MapPin, Users, Star, Eye, Edit3, Plus, Filter, Ba
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart as RechartsPieChart, Cell, Pie } from 'recharts';
 import ToursManagement  from './ToursManagement.tsx';
 import { supabase } from '../../lib/supabase';
+import CustomerManagement from './CustomerManagement.tsx';
 
 // Types
 interface BookingData {
@@ -410,12 +411,9 @@ const ToursView: React.FC = () => {
   return <ToursManagement />;
 };
 
-const CustomersView: React.FC = () => (
-  <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-    <h2 className="text-2xl font-bold text-gray-900 mb-4">Customer Management</h2>
-    <p className="text-gray-600">View customer profiles, booking history, and manage customer relationships.</p>
-  </div>
-);
+const CustomersView: React.FC = () => {
+  return <CustomerManagement />;
+};
 
 const AnalyticsView: React.FC = () => (
   <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
