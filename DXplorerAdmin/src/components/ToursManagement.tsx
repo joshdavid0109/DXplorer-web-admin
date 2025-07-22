@@ -3,6 +3,7 @@ import { AlertCircle, CheckCircle, MapPin, Edit3, Eye, Plus, Search, Filter, Sta
 import { usePackages } from '../../service/usePackages'; // Import your custom hook
 import type { ExtendedPackage } from '../../service/packagesService'; // Import the ExtendedPackage type
 import type { Database } from '../../lib/types'; // Import the Database type
+import { supabase } from '../../lib/supabase';
 
 type Tour = ExtendedPackage; // Use the ExtendedPackage type for Tour
 
@@ -29,7 +30,6 @@ interface TourFormData {
   nights: number;
   status: 'active' | 'inactive' | 'archived';
   tour_type: 'Domestic' | 'International';
-  image_uri?: string; // Optional field for image URI
 }
 
 const ToursManagement: React.FC = () => {
@@ -54,7 +54,7 @@ const ToursManagement: React.FC = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [imageError, setImageError] = useState('');
   const fileInputRef = useRef(null);
-
+  const [uploadedImageUrl, setUploadedImageUrl] = useState('');
 
 const getDestination = (tour: Tour) => {
   if (!tour) return 'Unknown Location';
@@ -67,28 +67,38 @@ const getDestination = (tour: Tour) => {
 };
 
 const getAvailableDates = (tour: Tour) => {
-  if (!tour || !tour.available_dates) return [];
-  
+  if (!tour || !tour.available_dates || !Array.isArray(tour.available_dates)) {
+    return [];
+  }
+
   try {
-    if (Array.isArray(tour.available_dates) && tour.available_dates.length > 0) {
-      const firstDateSet = tour.available_dates[0];
-      if (firstDateSet && firstDateSet.available_Date) {
-        return firstDateSet.available_Date.map(date => ({
-          start: date.start,
-          end: date.end,
-          remaining_slots: parseInt(date.remaining_slots.toString())
-        }));
-      }
+    const first = tour.available_dates[0];
+
+    // Case 1: Nested available_Date array
+    if (first?.available_Date && Array.isArray(first.available_Date)) {
+      return first.available_Date.map(date => ({
+        start: date.start,
+        end: date.end,
+        remaining_slots: parseInt(date.remaining_slots?.toString() || '0', 10)
+      }));
     }
-    if (Array.isArray(tour.available_dates) && tour.available_dates.length > 0 && tour.available_dates[0].start) {
-      return tour.available_dates;
+
+    // Case 2: Flat array of dates
+    if (first?.start && first?.end) {
+      return tour.available_dates.map(date => ({
+        start: date.start,
+        end: date.end,
+        remaining_slots: parseInt(date.remaining_slots?.toString() || '0', 10)
+      }));
     }
+
     return [];
   } catch (error) {
     console.error('Error getting available dates:', error);
     return [];
   }
 };
+
 
 const getSideLocations = (tour: Tour) => {
   if (!tour) return [];
@@ -256,7 +266,32 @@ const validateFile = (file) => {
   return null;
 };
 
-// Upload function to Supabase
+const checkExistingBuckets = async () => {
+   try {
+    // Check authentication first
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      console.error('User not authenticated');
+      return;
+    }
+
+    // Try to list files in the packages bucket
+    const { data: files, error } = await supabase.storage
+      .from('packages')
+      .list();
+    
+    if (error) {
+      console.error('Error accessing packages bucket:', error);
+      console.error('Error details:', error.message);
+    } else {
+      console.log('Successfully accessed packages bucket');
+      console.log('Files:', files);
+    }
+  } catch (error) {
+    console.error('Unexpected error:', error);
+  }
+};
+
 const uploadImageToSupabase = async (file) => {
   try {
     setImageError('');
@@ -270,11 +305,13 @@ const uploadImageToSupabase = async (file) => {
     
     // Generate unique filename
     const timestamp = Date.now();
-    const fileName = `tour-images/${timestamp}-${file.name}`;
+    const fileName = `${timestamp}-${file.name}`;
+    
+    console.log('Uploading file:', fileName);
     
     // Upload to Supabase Storage
     const { data, error: uploadError } = await supabase.storage
-      .from('tour-images') // Make sure this bucket exists in your Supabase storage
+      .from('packages')
       .upload(fileName, file, {
         cacheControl: '3600',
         upsert: false
@@ -282,18 +319,28 @@ const uploadImageToSupabase = async (file) => {
     
     if (uploadError) {
       console.error('Upload error:', uploadError);
-      setImageError('Failed to upload image. Please try again.');
+      setImageError(`Upload failed: ${uploadError.message}`);
       return null;
     }
     
-    // Get public URL
-    const { data: urlData } = supabase.storage
-      .from('tour-images')
-      .getPublicUrl(fileName);
+    console.log('Upload successful:', data);
+    
+    // Create signed URL instead of public URL
+    const { data: urlData, error: urlError } = await supabase.storage
+      .from('packages')
+      .createSignedUrl(fileName, 60 * 60 * 24 * 365); // 7 days expiration
+    
+    if (urlError) {
+      console.error('Signed URL error:', urlError);
+      setImageError(`Failed to create signed URL: ${urlError.message}`);
+      return null;
+    }
+    
+    console.log('Signed URL:', urlData.signedUrl);
     
     setUploadProgress(100);
     
-    return urlData.publicUrl;
+    return urlData.signedUrl;
   } catch (error) {
     console.error('Upload error:', error);
     setImageError('Failed to upload image. Please try again.');
@@ -332,14 +379,15 @@ const handleDrop = async (e) => {
 const handleFileSelect = async (e) => {
   const file = e.target.files[0];
   if (file) {
+    console.log('File selected:', file.name);
     await handleFileUpload(file);
   }
 };
 
 const handleFileUpload = async (file) => {
   setUploadProgress(10);
-  
-  // Simulate upload progress
+  setImageError('');
+
   const progressInterval = setInterval(() => {
     setUploadProgress(prev => {
       if (prev >= 90) {
@@ -349,34 +397,45 @@ const handleFileUpload = async (file) => {
       return prev + 10;
     });
   }, 100);
-  
+
   try {
     const imageUrl = await uploadImageToSupabase(file);
-    
+    console.log('Returned imageUrl:', imageUrl);
+
     if (imageUrl) {
-      setFormData({ ...formData, image_url: imageUrl });
+      // Set both the uploaded image URL and update formData
+      setUploadedImageUrl(imageUrl);
+      setFormData(prev => ({
+        ...prev,
+        image_url: imageUrl
+      }));
+
       setUploadProgress(100);
-      
-      // Reset progress after a short delay
+      console.log('Image uploaded successfully:', imageUrl);
+
       setTimeout(() => setUploadProgress(0), 1000);
     } else {
+      console.warn('Image URL not returned');
+      setImageError('Failed to get image URL after upload');
       setUploadProgress(0);
     }
   } catch (error) {
-    console.error('File upload error:', error);
+    console.error('Upload failed:', error);
     setImageError('Failed to upload image. Please try again.');
     setUploadProgress(0);
   }
-  
+
   clearInterval(progressInterval);
 };
 
+
 const getImageUrl = (tour: Tour) => {
-  if (!tour) return 'https://via.placeholder.com/400x300?text=No+Image';
 
   try {
 
     // First, check if package_details exists
+    if (tour.package_details && tour.package_details.image_url) {
+      return tour.package_details.image_url;
     if (tour.package_details && tour.package_details.image_url) {
       return tour.package_details.image_url;
     }
@@ -391,10 +450,8 @@ const getImageUrl = (tour: Tour) => {
     }
 
     // If no image is found in any expected location
-    return 'https://via.placeholder.com/400x300?text=No+Image';
 
   } catch (error) {
-    console.error('Error getting image URL:', error);
     return 'https://via.placeholder.com/400x300?text=No+Image';
   }
 };
@@ -489,6 +546,11 @@ const updateDateRangeInput = (index, field, value) => {
     tour_type: 'Domestic'
   });
 
+useEffect(() => {
+  console.log('FormData updated:', formData);
+  console.log('Image URL in formData:', formData.image_url);
+}, [formData]);
+
   // Filter tours whenever filters change
   useEffect(() => {
     const debounceTimer = setTimeout(() => {
@@ -503,36 +565,38 @@ const updateDateRangeInput = (index, field, value) => {
   }, [searchTerm, statusFilter, typeFilter]);
 
   const handleAddTour = () => {
-    setEditingTour(null);
-    setFormData({
-      destination: '',
-      price: 0,
-      image_url: '',
-      itinerary: '',
-      side_locations: [],
-      inclusions: [],
-      available_dates: [],
-      duration: 1,
-      nights: 1,
-      status: 'archived',
-      tour_type: 'Domestic'
-    });
-    setSideLocationInputs(['']);
-    setInclusionInputs(['']);
-    setDateRangeInputs([{ start: '', end: '', slots: 1 }]);
-    setShowModal(true);
-  };
+  setEditingTour(null);
+  setUploadedImageUrl(''); // Reset uploaded image URL
+  setFormData({
+    destination: '',
+    price: 0,
+    image_url: '',
+    itinerary: '',
+    side_locations: [],
+    inclusions: [],
+    available_dates: [],
+    duration: 1,
+    nights: 1,
+    status: 'archived',
+    tour_type: 'Domestic'
+  });
+  setSideLocationInputs(['']);
+  setInclusionInputs([{ item: '', note: '' }]);
+  setDateRangeInputs([{ start: '', end: '', slots: 1 }]);
+  setShowModal(true);
+};
 
-const handleEditTour = (tour: Tour) => {
+const handleEditTour = (tour) => {
   setEditingTour(tour);
   const availableDates = getAvailableDates(tour);
   const sideLocations = getSideLocations(tour);
   const inclusions = getInclusions(tour);
+  const imageUrl = getImageUrl(tour);
   
   setFormData({
     destination: getDestination(tour),
     price: tour.price,
-    image_url: getImageUrl(tour),
+    image_url: imageUrl,
     itinerary: getItinerary(tour),
     side_locations: sideLocations,
     inclusions: inclusions,
@@ -543,8 +607,11 @@ const handleEditTour = (tour: Tour) => {
     tour_type: tour.tour_type
   });
 
+  // Set the uploaded image URL for preview
+  setUploadedImageUrl(imageUrl);
+
+  // ... rest of the function remains the same
   const inclusionObjects = inclusions.map(inclusion => {
-    // Check if inclusion has a note separated by colon
     const colonIndex = inclusion.indexOf(':');
     if (colonIndex > 0) {
       return { 
@@ -552,7 +619,6 @@ const handleEditTour = (tour: Tour) => {
         note: inclusion.substring(colonIndex + 1).trim() 
       };
     }
-    // Check if inclusion has a note in parentheses (fallback)
     const noteMatch = inclusion.match(/^(.+)\s+\((.+)\)$/);
     if (noteMatch) {
       return { item: noteMatch[1].trim(), note: noteMatch[2].trim() };
@@ -560,7 +626,6 @@ const handleEditTour = (tour: Tour) => {
     return { item: inclusion, note: '' };
   });
   
-  // Set input arrays
   setSideLocationInputs(sideLocations.length > 0 ? sideLocations : ['']);
   setInclusionInputs(inclusionObjects.length > 0 ? inclusionObjects : [{ item: '', note: '' }]);
   setDateRangeInputs(availableDates.length > 0 ? availableDates.map(date => ({
@@ -609,6 +674,7 @@ const handleEditTour = (tour: Tour) => {
     try {
       if (editingTour) {
         // Update existing tour
+        console.log('Updating tour:', editingTour.package_id);
         await updatePackage(editingTour.package_id, formData);
       } else {
         // Create new tour
@@ -721,15 +787,18 @@ const handleEditTour = (tour: Tour) => {
   }
 
   // Helper function to get the destination from tour object
-
-
+  
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col rounded-2xl p-6 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">Tours Management</h2>
-          <p className="text-gray-600">Create, edit, and manage your tour packages</p>
+          {/* Header */}
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">Tours Management</h1>
+        <p className="text-gray-600">Create, edit, and manage your tour packages</p>
+      </div>
+        
         </div>
         <button
           onClick={handleAddTour}
@@ -912,9 +981,9 @@ const handleEditTour = (tour: Tour) => {
       {/* Add/Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] shadow-2xl flex flex-col">
+          <div className="bg-white rounded-2xl max-w-6xl w-full max-h-[90vh] shadow-2xl flex flex-col">
             {/* Modal Header - Fixed */}
-            <div className="bg-gradient-to-r from-[#154689] to-[#FAAD2B] p-6 text-white rounded-t-2xl flex-shrink-0">
+            <div className="bg-gradient-to-r bg-[#154689] p-6 text-white rounded-t-2xl flex-shrink-0">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-4">
                   <div className="p-3 bg-white/20 rounded-xl">
@@ -1073,12 +1142,12 @@ const handleEditTour = (tour: Tour) => {
                           </div>
                         </div>
                       )}
-                      
+
                       {formData.image_url ? (
                         <div className="relative group">
                           <img
                             src={formData.image_url}
-                            alt="Cover preview"
+                            alt={"Cover Preview"}
                             className="w-full h-48 object-cover rounded-lg "
                           />
                           <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-200 rounded-lg flex items-center justify-center">
@@ -1091,7 +1160,7 @@ const handleEditTour = (tour: Tour) => {
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              setFormData({ ...formData, image_url: '' });
+                                setFormData({ ...formData, image_url: '' });
                             }}
                             className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
                           >
@@ -1320,7 +1389,7 @@ const handleEditTour = (tour: Tour) => {
                       onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
                       className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
                     >
-                      <option value="archived">archived - Not visible to customers</option>
+                      <option value="archived">Draft - Not visible to customers</option>
                       <option value="active">active - Available for booking</option>
                       <option value="inactive">inactive - Not available for booking</option>
                     </select>
@@ -1371,9 +1440,9 @@ const handleEditTour = (tour: Tour) => {
       {/* View Modal */}
       {showViewModal && viewingTour && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] shadow-2xl flex flex-col">
+          <div className="bg-white rounded-2xl max-w-6xl w-full max-h-[90vh] shadow-2xl flex flex-col">
             {/* Modal Header */}
-            <div className="relative bg-gradient-to-r from-[#154689] to-[#FAAD2B] p-6 text-white">
+            <div className="relative bg-gradient-to-r bg-[#154689] p-6 text-white">
               <button
                 onClick={() => {
                   setShowViewModal(false);

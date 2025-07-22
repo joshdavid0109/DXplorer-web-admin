@@ -43,7 +43,9 @@ export const usePackages = () => {
       };
       
       return transformed;
-    });    
+    });
+
+    
     setPackages(transformedData)
     console.log('=== usePackages: State updated with transformed data ===')
     

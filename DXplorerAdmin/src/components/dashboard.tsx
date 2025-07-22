@@ -3,6 +3,7 @@ import { Calendar, DollarSign, MapPin, Users, Star, Eye, Edit3, Plus, Filter, Ba
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart as RechartsPieChart, Cell, Pie } from 'recharts';
 import ToursManagement  from './ToursManagement.tsx';
 import { supabase } from '../../lib/supabase';
+import CustomerManagement from './CustomerManagement.tsx';
 
 // Types
 interface BookingData {
@@ -70,12 +71,23 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onNavigate, activeIt
   ];
 
   const handleNavigation = (item: NavigationItem) => {
-    // Close sidebar on mobile after navigation
+    // Close sidebar on mobile
     if (window.innerWidth < 1024) {
       onClose();
     }
-    
-    // Call parent navigation handler
+
+    // Handle Logout case
+    if (item.name === 'Log out') {
+      // Clear session via Supabase
+      supabase.auth.signOut().then(() => {
+        window.location.href = '/App'; // or '/login' if you have a Login.tsx route
+      }).catch((error) => {
+        console.error('Logout failed:', error);
+      });
+      return;
+    }
+
+    // Call parent navigation handler for normal items
     onNavigate(item.name);
   };
   
@@ -399,12 +411,9 @@ const ToursView: React.FC = () => {
   return <ToursManagement />;
 };
 
-const CustomersView: React.FC = () => (
-  <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-    <h2 className="text-2xl font-bold text-gray-900 mb-4">Customer Management</h2>
-    <p className="text-gray-600">View customer profiles, booking history, and manage customer relationships.</p>
-  </div>
-);
+const CustomersView: React.FC = () => {
+  return <CustomerManagement />;
+};
 
 const AnalyticsView: React.FC = () => (
   <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
@@ -420,22 +429,6 @@ const SettingsView: React.FC = () => (
   </div>
 );
 
-const LogOut: React.FC = () => {
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    console.log('User logged out');
-  };
-
-  return (
-    <button
-      onClick={handleLogout}
-      className="flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-    >
-      <LogOutIcon className="h-4 w-4" />
-      <span>Log Out</span>
-    </button>
-  );
-}
 
 // Main Dashboard Component
 const Dashboard: React.FC = () => {
@@ -525,8 +518,7 @@ const Dashboard: React.FC = () => {
         return <AnalyticsView />;
       case 'Settings':
         return <SettingsView />;
-      case 'Log out':
-        return <LogOut />;
+
       default:
         return (
           <>

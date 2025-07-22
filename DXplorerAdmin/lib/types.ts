@@ -4,7 +4,7 @@ export interface Database {
       packages: {
         Row: {
           id: number
-          destination: string
+          main_location: string
           price: number
           rating: number
           image_url: string
@@ -22,7 +22,7 @@ export interface Database {
           updated_at: string
         }
         Insert: {
-          destination: string
+          main_location: string
           price: number
           rating?: number
           image_url: string
@@ -39,7 +39,7 @@ export interface Database {
         }
         Update: {
           id?: number
-          destination?: string
+          main_location?: string
           price?: number
           rating?: number
           image_url?: string
