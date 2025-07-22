@@ -104,7 +104,10 @@ const AuthComponent = ({ onAuthSuccess }) => {
         <div className="bg-white rounded-xl shadow-lg p-8">
           {/* Header */}
           <div className="text-center">
-            <Globe className="mx-auto h-12 w-12 text-blue-600" />
+            <img
+              className="mx-auto h-12 w-auto"
+              src="../src/assets/dxlogo.png" // Replace with your logo path
+              alt="DXplorer Logo"></img>
             <h2 className="mt-6 text-3xl font-extrabold text-gray-900">
               {isLogin ? 'Sign in to your account' : 'Create your account'}
             </h2>

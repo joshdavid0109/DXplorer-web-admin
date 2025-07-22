@@ -33,7 +33,7 @@ export const packagesService = {
       // Test the join to see if it works
       const { data: testJoin, error: joinError } = await supabase
         .from('packages')
-        .select('package_id, destination, package_details(*)')
+        .select('*')
         .limit(3)
       
       console.log('Test join data:', testJoin)
@@ -55,7 +55,7 @@ export const packagesService = {
             itinerary,
             side_locations,
             inclusions,
-            image_uri
+            image_url
           )
         `)
 
@@ -313,6 +313,8 @@ export const packagesService = {
         `)
         .eq('package_id', packageResult.package_id)
         .single()
+
+      console.log('Fetched complete package:', completePackage)
 
       if (fetchError) {
         console.error('Fetch complete package error:', fetchError)

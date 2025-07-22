@@ -375,16 +375,15 @@ const getImageUrl = (tour: Tour) => {
   if (!tour) return 'https://via.placeholder.com/400x300?text=No+Image';
 
   try {
-    console.log('Getting image URL for tour:', tour);
 
     // First, check if package_details exists
-    if (tour.package_details && tour.package_details.image_uri) {
-      return tour.package_details.image_uri;
+    if (tour.package_details && tour.package_details.image_url) {
+      return tour.package_details.image_url;
     }
 
     // Fallback to top-level image_uri or image (though they appear empty in your example)
-    if (tour.image_uri) {
-        return tour.image_uri;
+    if (tour.image_url) {
+        return tour.image_url;
     }
 
     if (tour.image) {
@@ -779,6 +778,7 @@ const handleEditTour = (tour: Tour) => {
       {/* Tours Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {packages.map((tour) => (
+          console.log('Rendering tour:', tour),
           <div key={tour.id} className="group bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-xl hover:border-gray-200 transition-all duration-300 hover:-translate-y-1">
             <div className="relative overflow-hidden">
               <img
