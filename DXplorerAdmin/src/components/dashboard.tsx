@@ -4,6 +4,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import ToursManagement  from './ToursManagement.tsx';
 import { supabase } from '../../lib/supabase';
 import CustomerManagement from './CustomerManagement.tsx';
+import AgentManagement from './AgentManagement.tsx';
 
 // Types
 interface BookingData {
@@ -65,7 +66,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onNavigate, activeIt
     { name: 'Bookings', icon: Calendar, href: '/bookings' },
     { name: 'Tours', icon: MapPin, href: '/tours' },
     { name: 'Customers', icon: Users, href: '/customers' },
-    { name: 'Analytics', icon: TrendingUp, href: '/analytics' },
+    { name: 'Agents', icon: TrendingUp, href: '/agents' },
     { name: 'Settings', icon: Settings, href: '/settings' },
     { name: 'Log out', icon: LogOutIcon, href: '/logout'},
   ];
@@ -370,13 +371,13 @@ const TourDistributionChart: React.FC<{
 const QuickActions: React.FC<{
   onCreateTour: () => void;
   onManageBookings: () => void;
-  onViewAnalytics: () => void;
+  onViewAgents: () => void;
   onCustomerSupport: () => void;
-}> = ({ onCreateTour, onManageBookings, onViewAnalytics, onCustomerSupport }) => {
+}> = ({ onCreateTour, onManageBookings, onViewAgents, onCustomerSupport }) => {
   const actions = [
     { title: 'Create New Tour', icon: Plus, color: 'bg-blue-500', onClick: onCreateTour },
     { title: 'Manage Bookings', icon: Calendar, color: 'bg-green-500', onClick: onManageBookings },
-    { title: 'View Analytics', icon: BarChart3, color: 'bg-purple-500', onClick: onViewAnalytics },
+    { title: 'View Agents', icon: BarChart3, color: 'bg-purple-500', onClick: onViewAgents },
     { title: 'Customer Support', icon: Users, color: 'bg-orange-500', onClick: onCustomerSupport },
   ];
 
@@ -415,12 +416,9 @@ const CustomersView: React.FC = () => {
   return <CustomerManagement />;
 };
 
-const AnalyticsView: React.FC = () => (
-  <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-    <h2 className="text-2xl font-bold text-gray-900 mb-4">Analytics & Reports</h2>
-    <p className="text-gray-600">Detailed analytics and reports for your travel business performance.</p>
-  </div>
-);
+const AgentsView: React.FC = () => {
+  return <AgentManagement />;
+};
 
 const SettingsView: React.FC = () => (
   <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
@@ -497,9 +495,9 @@ const Dashboard: React.FC = () => {
     setCurrentView('Bookings');
     console.log('Manage bookings clicked');
   };
-  const handleViewAnalytics = () => {
-    setCurrentView('Analytics');
-    console.log('View analytics clicked');
+  const handleViewAgents = () => {
+    setCurrentView('Agents');
+    console.log('View Agents clicked');
   };
   const handleCustomerSupport = () => {
     setCurrentView('Customers');
@@ -514,8 +512,8 @@ const Dashboard: React.FC = () => {
         return <ToursView />;
       case 'Customers':
         return <CustomersView />;
-      case 'Analytics':
-        return <AnalyticsView />;
+      case 'Agents':
+        return <AgentsView />;
       case 'Settings':
         return <SettingsView />;
 
@@ -577,7 +575,7 @@ const Dashboard: React.FC = () => {
             <QuickActions
               onCreateTour={handleCreateTour}
               onManageBookings={handleManageBookings}
-              onViewAnalytics={handleViewAnalytics}
+              onViewAgents={handleViewAgents}
               onCustomerSupport={handleCustomerSupport}
             />
           </>

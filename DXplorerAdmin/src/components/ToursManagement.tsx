@@ -436,7 +436,7 @@ const getImageUrl = (tour: Tour) => {
     // First, check if package_details exists
     if (tour.package_details && tour.package_details.image_url) {
       return tour.package_details.image_url;
-    if (tour.package_details && tour.package_details.image_url) {
+    } if (tour.package_details && tour.package_details.image_url) {
       return tour.package_details.image_url;
     }
 
@@ -454,7 +454,7 @@ const getImageUrl = (tour: Tour) => {
   } catch (error) {
     return 'https://via.placeholder.com/400x300?text=No+Image';
   }
-};
+}
 
 const addSideLocationInput = () => {
   setSideLocationInputs([...sideLocationInputs, '']);
