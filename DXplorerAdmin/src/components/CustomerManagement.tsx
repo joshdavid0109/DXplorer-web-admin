@@ -54,62 +54,168 @@ const CustomerManagement: React.FC = () => {
     });
 
   // Fetch customers
-    const fetchCustomers = async () => {
+const fetchCustomers = async () => {
     try {
         setLoading(true);
         
-        // Check if user is authenticated
-        const { data: { user } } = await supabase.auth.getUser();
-        console.log('Current user:', user);
-        
-        // First, let's test the basic query without join
-        console.log('Testing basic query...');
-        const { data: basicData, error: basicError } = await supabase
-            .from('user_profiles')
-            .select('*')
-            .order('created_at', { ascending: false });
-        
-        console.log('Basic query result:', basicData);
-        console.log('Basic query error:', basicError);
-        
-        // Now let's test if the users table exists and has data
-        console.log('Testing users table...');
-        const { data: usersData, error: usersError } = await supabase
+        // First, let's see exactly what's in the users table for clients
+        const { data: clientUsersData, error: clientUsersError } = await supabase
             .from('users')
-            .select('*')
-            .limit(5);
+            .select('user_id, status, role, username, created_at')
+            .eq('role', 'client');
         
-        console.log('Users table result:', usersData);
-        console.log('Users table error:', usersError);
+        if (clientUsersError) {
+            console.error('Client users error:', clientUsersError);
+            throw clientUsersError;
+        }
         
-        // Now let's try the join query
-        console.log('Testing join query...');
-        const { data: joinData, error: joinError } = await supabase
+        console.log('=== DEBUGGING CLIENT USERS ===');
+        console.log('Number of client users found:', clientUsersData?.length);
+        console.log('All client users:', clientUsersData);
+        
+        // Let's examine each client user in detail
+        clientUsersData?.forEach((user, index) => {
+            console.log(`Client ${index + 1}:`);
+            console.log(`  - user_id: ${user.user_id}`);
+            console.log(`  - username: ${user.username}`);
+            console.log(`  - status: ${user.status}`);
+            console.log(`  - created_at: ${user.created_at}`);
+        });
+        
+        if (!clientUsersData || clientUsersData.length === 0) {
+            console.log('No users with role "client" found');
+            setCustomers([]);
+            return;
+        }
+        
+        // Get user IDs from client users
+        const clientUserIds = clientUsersData.map(user => user.user_id);
+        console.log('Client user IDs to look for:', clientUserIds);
+        console.log('Client user IDs types:', clientUserIds.map(id => typeof id));
+        
+        // Let's also check what user_ids exist in profiles
+        const { data: allProfilesCheck, error: allProfilesError } = await supabase
             .from('user_profiles')
-            .select(`
-                *,
-                users(status)
-            `)
+            .select('user_id');
+        console.log('All user_ids in profiles:', allProfilesCheck?.map(p => p.user_id));
+        console.log('Profile user_ids types:', allProfilesCheck?.map(p => typeof p.user_id));
+        
+        // Try to match manually in JavaScript first
+        const manualMatches = allProfilesCheck?.filter(profile => 
+            clientUserIds.includes(profile.user_id)
+        );
+        console.log('Manual JavaScript matches:', manualMatches);
+        
+        // Get profiles for these users
+        const { data: profilesData, error: profilesError } = await supabase
+            .from('user_profiles')
+            .select('*')
+            .in('user_id', clientUserIds)
             .order('created_at', { ascending: false });
         
-        console.log('Join query result:', joinData);
-        console.log('Join query error:', joinError);
-        
-        // If join works, use it; otherwise fall back to basic query
-        if (joinError) {
-            console.log('Join failed, using basic query');
-            setCustomers(basicData || []);
-        } else {
-            console.log('Join succeeded, transforming data');
-            const transformedData = joinData?.map(customer => ({
-                ...customer,
-                status: customer.users?.status || 'active'
-            })) || [];
-            setCustomers(transformedData);
+        if (profilesError) {
+            console.error('Profiles error:', profilesError);
+            throw profilesError;
         }
+        
+        console.log('=== DEBUGGING USER PROFILES ===');
+        console.log('Number of profiles found:', profilesData?.length);
+        console.log('All profiles for clients:', profilesData);
+        
+        // If no profiles found but we know clients exist, try alternative approach
+        if (!profilesData || profilesData.length === 0) {
+            console.log('No profiles found with .in() query, trying alternative...');
+            
+            // Try getting all profiles and filtering in JavaScript
+            const { data: allProfiles, error: allProfilesErr } = await supabase
+                .from('user_profiles')
+                .select('*');
+            
+            const matchingProfiles = allProfiles?.filter(profile => 
+                clientUserIds.some(clientId => 
+                    String(profile.user_id) === String(clientId)
+                )
+            );
+            
+            console.log('Alternative approach found profiles:', matchingProfiles);
+            
+            if (matchingProfiles && matchingProfiles.length > 0) {
+                const transformedData = matchingProfiles.map(profile => {
+                    const userData = clientUsersData?.find(user => 
+                        String(user.user_id) === String(profile.user_id)
+                    );
+                    
+                    return {
+                        ...profile,
+                        status: userData?.status || 'active',
+                        role: userData?.role || 'client',
+                        username: userData?.username || '',
+                        user_created_at: userData?.created_at || null
+                    };
+                });
+                
+                console.log('Alternative transformed data:', transformedData);
+                setCustomers(transformedData);
+                return;
+            }
+        }
+        
+        // Let's examine each profile in detail
+        profilesData?.forEach((profile, index) => {
+            console.log(`Profile ${index + 1}:`);
+            console.log(`  - profile_id: ${profile.profile_id}`);
+            console.log(`  - user_id: ${profile.user_id}`);
+            console.log(`  - first_name: ${profile.first_name}`);
+            console.log(`  - last_name: ${profile.last_name}`);
+            console.log(`  - email_address: ${profile.email_address}`);
+        });
+        
+        // Check for duplicates
+        const userIdCounts = {};
+        profilesData?.forEach(profile => {
+            userIdCounts[profile.user_id] = (userIdCounts[profile.user_id] || 0) + 1;
+        });
+        
+        console.log('=== DUPLICATE CHECK ===');
+        console.log('User ID counts in profiles:', userIdCounts);
+        
+        const duplicates = Object.entries(userIdCounts).filter(([userId, count]) => count > 1);
+        if (duplicates.length > 0) {
+            console.warn('FOUND DUPLICATE PROFILES:', duplicates);
+            console.warn('Some users have multiple profiles in user_profiles table!');
+        }
+        
+        // Transform and combine the data
+        const transformedData = profilesData?.map(profile => {
+            // Find the matching user data
+            const userData = clientUsersData?.find(user => user.user_id === profile.user_id);
+            
+            return {
+                ...profile,
+                // Add user data with fallbacks
+                status: userData?.status || 'active',
+                role: userData?.role || 'client',
+                username: userData?.username || '',
+                user_created_at: userData?.created_at || null
+            };
+        }) || [];
+        
+        console.log('=== FINAL RESULT ===');
+        console.log('Final transformed client data:', transformedData);
+        console.log(`Expected 1 client, but found ${transformedData.length} client records`);
+        
+        // If you only want 1 client and there are duplicates, you can uncomment this:
+        // const uniqueClients = transformedData.filter((client, index, self) => 
+        //     index === self.findIndex(c => c.user_id === client.user_id)
+        // );
+        // console.log('After removing duplicates:', uniqueClients);
+        // setCustomers(uniqueClients);
+        
+        setCustomers(transformedData);
         
     } catch (error) {
         console.error('Error fetching customers:', error);
+        setCustomers([]);
     } finally {
         setLoading(false);
     }
