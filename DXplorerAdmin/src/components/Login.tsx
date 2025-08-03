@@ -36,17 +36,29 @@ const AuthComponent = () => {
 
     try {
       if (isLogin) {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.auth.signUp({ email, password });
-        if (error) throw error;
+          const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+          if (error) throw error;
+          
+          // Check if user has admin role
+          const { data: userData, error: userError } = await supabase
+            .from('users')
+            .select('role')
+            .eq('user_id', data.user.id)
+            .single();
+          
+          if (userError || userData?.role !== 'admin') {
+            await supabase.auth.signOut(); // Sign out non-admin user
+            throw new Error('Access denied. Admin privileges required.');
+          }
+        } else {
+          const { error } = await supabase.auth.signUp({ email, password });
+          if (error) throw error;
+        }
+      } catch (err) {
+        setError(err.message || 'Authentication failed');
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      setError(err.message || 'Authentication failed');
-    } finally {
-      setLoading(false);
-    }
   };
 
   return (
@@ -151,13 +163,38 @@ const App = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const checkAuth = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      setUser(session?.user || null);
-      setLoading(false);
-    };
+   const checkAuth = async () => {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  
+  if (session?.user) {
+    try {
+      // Try matching with auth.users.id first
+      const { data: userData, error } = await supabase
+        .from('users')
+        .select('role')
+        .eq('user_id', session.user.id)  // Use auth_users_id column
+        .single();
+      
+      if (error) {
+        console.error('Role check error:', error);
+        setUser(session.user); // Allow access on error
+      } else if (userData?.role !== 'admin') {
+        await supabase.auth.signOut();
+        setUser(null);
+      } else {
+        setUser(session.user);
+      }
+    } catch (err) {
+      console.error('Auth check failed:', err);
+      setUser(session.user); // Allow access on error
+    }
+  } else {
+    setUser(null);
+  }
+  setLoading(false);
+};
 
     checkAuth();
 

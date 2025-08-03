@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Calendar, DollarSign, MapPin, Users, Star, Eye, Edit3, Plus, Filter, BarChart3, PieChart, Globe, TrendingUp, Settings, Menu, X, LogOutIcon } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart as RechartsPieChart, Cell, Pie } from 'recharts';
-import ToursManagement  from './ToursManagement.tsx';
+import ToursManagement from './ToursManagement.tsx';
 import { supabase } from '../../lib/supabase';
 import CustomerManagement from './CustomerManagement.tsx';
 import AgentManagement from './AgentManagement.tsx';
+import BookingsManagement from './BookingsManagement.tsx';
 
 // Types
 interface BookingData {
@@ -57,9 +58,314 @@ interface SidebarProps {
   activeItem: string;
 }
 
+interface DashboardStats {
+  totalBookings: number;
+  totalRevenue: number;
+  activeTours: number;
+  totalCustomers: number;
+  bookingsChange: number;
+  revenueChange: number;
+  toursChange: number;
+  customersChange: number;
+}
+
 type TimePeriod = '7d' | '30d' | '90d' | '1y';
 
-// Enhanced Sidebar Component with Navigation
+// Custom hooks for data fetching
+const useDashboardStats = () => {
+  const [stats, setStats] = useState<DashboardStats>({
+    totalBookings: 0,
+    totalRevenue: 0,
+    activeTours: 0,
+    totalCustomers: 0,
+    bookingsChange: 0,
+    revenueChange: 0,
+    toursChange: 0,
+    customersChange: 0,
+  });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        setLoading(true);
+        
+        // Fetch total bookings
+        const { count: totalBookings } = await supabase
+          .from('bookings')
+          .select('*', { count: 'exact', head: true });
+
+        // Fetch total revenue from payments
+        const { data: revenueData } = await supabase
+          .from('payments')
+          .select('amount')
+          .eq('status', 'completed'); // or whatever your completed status is
+
+        const totalRevenue = revenueData?.reduce((sum, payment) => sum + (payment.amount || 0), 0) || 0;
+
+        // Fetch active packages (tours)
+        const { count: activeTours } = await supabase
+          .from('packages')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'active'); // adjust status value as needed
+
+        // Fetch total users (customers) from user_profiles instead
+        const { count: totalCustomers } = await supabase
+          .from('user_profiles')
+          .select('*', { count: 'exact', head: true });
+
+        // Calculate percentage changes (comparing with previous period)
+        // For now, using mock changes - you can implement actual comparison logic
+        setStats({
+          totalBookings: totalBookings || 0,
+          totalRevenue: totalRevenue,
+          activeTours: activeTours || 0,
+          totalCustomers: totalCustomers || 0,
+          bookingsChange: 12.5,
+          revenueChange: 8.2,
+          toursChange: -2.4,
+          customersChange: 15.3,
+        });
+
+      } catch (err) {
+        console.error('Error fetching dashboard stats:', err);
+        setError('Failed to load dashboard statistics');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchStats();
+  }, []);
+
+  return { stats, loading, error };
+};
+
+const useBookingTrends = (period: TimePeriod) => {
+  const [data, setData] = useState<BookingData[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchBookingTrends = async () => {
+      try {
+        setLoading(true);
+        
+        // Calculate date range based on period
+        const now = new Date();
+        const daysBack = period === '7d' ? 7 : period === '30d' ? 30 : period === '90d' ? 90 : 365;
+        const startDate = new Date(now.getTime() - daysBack * 24 * 60 * 60 * 1000);
+
+        const { data: bookings } = await supabase
+          .from('bookings')
+          .select('created_at, payments!inner(amount, status)')
+          .gte('created_at', startDate.toISOString())
+          .order('created_at');
+
+        // Group data by day/week/month depending on period
+        const groupedData = bookings?.reduce((acc, booking) => {
+          const date = new Date(booking.created_at);
+          const key = period === '7d' 
+            ? date.toLocaleDateString('en-US', { weekday: 'short' })
+            : period === '30d'
+            ? `${date.getMonth() + 1}/${date.getDate()}`
+            : `${date.getMonth() + 1}/${date.getFullYear()}`;
+
+          if (!acc[key]) {
+            acc[key] = { name: key, bookings: 0, revenue: 0 };
+          }
+          
+          acc[key].bookings += 1;
+          if (booking.payments && booking.payments.status === 'completed') {
+            acc[key].revenue += booking.payments.amount || 0;
+          }
+          
+          return acc;
+        }, {} as Record<string, BookingData>) || {};
+
+        setData(Object.values(groupedData));
+      } catch (error) {
+        console.error('Error fetching booking trends:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchBookingTrends();
+  }, [period]);
+
+  return { data, loading };
+};
+
+const useRecentBookings = (limit: number = 5) => {
+  const [bookings, setBookings] = useState<RecentBooking[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchRecentBookings = async () => {
+      try {
+        const { data } = await supabase
+          .from('bookings')
+          .select(`
+            booking_id,
+            created_at,
+            status,
+            user_id,
+            package_id
+          `)
+          .order('created_at', { ascending: false })
+          .limit(limit);
+
+       const formattedBookings = await Promise.all(
+  data?.map(async (booking) => {
+    // Get user info
+    const { data: userProfile } = await supabase
+      .from('user_profiles')
+      .select('first_name, last_name')
+      .eq('user_id', booking.user_id)
+      .single();
+    
+    const { data: user } = await supabase
+      .from('users')
+      .select('username')
+      .eq('user_id', booking.user_id)
+      .single();
+    
+    // Get package info
+    const { data: packageData } = await supabase
+      .from('packages')
+      .select('main_location')
+      .eq('package_id', booking.package_id)
+      .single();
+    
+    // Get payment info
+    const { data: payment } = await supabase
+      .from('payments')
+      .select('amount')
+      .eq('booking_id', booking.booking_id)
+      .single();
+
+    return {
+      id: booking.booking_id,
+      customer: userProfile 
+        ? `${userProfile.first_name || ''} ${userProfile.last_name || ''}`.trim()
+        : user?.username || 'Unknown Customer',
+      tour: packageData?.main_location || 'Unknown Tour',
+      date: new Date(booking.created_at).toLocaleDateString(),
+      amount: payment?.amount || 0,
+      status: booking.status as 'confirmed' | 'pending' | 'cancelled',
+    };
+  }) || []
+);
+
+        setBookings(formattedBookings);
+      } catch (error) {
+        console.error('Error fetching recent bookings:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchRecentBookings();
+  }, [limit]);
+
+  return { bookings, loading };
+};
+
+const useTopTours = (limit: number = 5) => {
+  const [tours, setTours] = useState<TopTour[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchTopTours = async () => {
+      try {
+        const { data } = await supabase
+          .from('packages')
+          .select(`
+            package_id,
+            main_location,
+            price,
+            bookings!inner(booking_id, status),
+            ratings(rating)
+          `);
+
+        const toursWithStats = data?.map(tour => {
+          const confirmedBookings = tour.bookings.filter(b => b.status === 'confirmed');
+          const totalRevenue = confirmedBookings.length * (tour.price || 0);
+          const avgRating = tour.ratings?.reduce((sum, r) => sum + r.rating, 0) / (tour.ratings?.length || 1) || 0;
+          
+          return {
+            name: tour.main_location,
+            bookings: confirmedBookings.length,
+            revenue: totalRevenue,
+            rating: avgRating,
+          };
+        }) || [];
+
+        // Sort by bookings count and take top tours
+        const topTours = toursWithStats
+          .sort((a, b) => b.bookings - a.bookings)
+          .slice(0, limit);
+
+        setTours(topTours);
+      } catch (error) {
+        console.error('Error fetching top tours:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchTopTours();
+  }, [limit]);
+
+  return { tours, loading };
+};
+
+const useTourDistribution = () => {
+  const [data, setData] = useState<TourDistribution[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchTourDistribution = async () => {
+      try {
+        const { data: packages } = await supabase
+          .from('packages')
+          .select(`
+            tour_type,
+            bookings!inner(booking_id)
+          `);
+
+        const categoryCount = packages?.reduce((acc, pkg) => {
+          const category = pkg.tour_type || 'Other';
+          acc[category] = (acc[category] || 0) + pkg.bookings.length;
+          return acc;
+        }, {} as Record<string, number>) || {};
+
+        const total = Object.values(categoryCount).reduce((sum, count) => sum + count, 0);
+        
+        const colors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'];
+        
+        const distribution = Object.entries(categoryCount).map(([name, count], index) => ({
+          name,
+          value: Math.round((count / total) * 100),
+          color: colors[index % colors.length],
+        }));
+
+        setData(distribution);
+      } catch (error) {
+        console.error('Error fetching tour distribution:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchTourDistribution();
+  }, []);
+
+  return { data, loading };
+};
+
+// Enhanced Sidebar Component with Navigation (unchanged)
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onNavigate, activeItem }) => {
   const navigationItems: NavigationItem[] = [
     { name: 'Dashboard', icon: BarChart3, href: '/dashboard' },
@@ -72,30 +378,24 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onNavigate, activeIt
   ];
 
   const handleNavigation = (item: NavigationItem) => {
-    // Close sidebar on mobile
     if (window.innerWidth < 1024) {
       onClose();
     }
 
-    // Handle Logout case
     if (item.name === 'Log out') {
-      // Clear session via Supabase
       supabase.auth.signOut().then(() => {
-        window.location.href = '/App'; // or '/login' if you have a Login.tsx route
+        window.location.href = '/App';
       }).catch((error) => {
         console.error('Logout failed:', error);
       });
       return;
     }
 
-    // Call parent navigation handler for normal items
     onNavigate(item.name);
   };
-  
 
   return (
     <>
-      {/* Overlay for mobile */}
       {isOpen && (
         <div 
           className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
@@ -103,9 +403,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onNavigate, activeIt
         />
       )}
       
-      {/* Sidebar */}
       <div className={`fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform ${isOpen ? 'translate-x-0' : '-translate-x-full'} transition-transform duration-300 ease-in-out lg:translate-x-0`}>
-        {/* Close button for mobile */}
         <button
           onClick={onClose}
           className="absolute top-4 right-4 p-2 rounded-lg hover:bg-gray-100 lg:hidden"
@@ -115,15 +413,13 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onNavigate, activeIt
         
         <div className="p-6">
           <div className="flex items-center space-x-2 mb-8">
-            {/* This div previously held the Globe icon */}
             <div className="p-2 rounded-lg"> 
               <img 
-                src={'../src/assets/logo.png'} // Assuming you have a logo image in your assets
+                src={'../src/assets/logo.png'}
                 alt="DXplorer Logo" 
-                className="w-full h-auto object-contain max-w-21 max-h-17"  // Tailwind CSS classes for sizing and fit
+                className="w-full h-auto object-contain max-w-21 max-h-17"
               />
             </div>
-
           </div>
           
           <nav className="space-y-2">
@@ -186,7 +482,6 @@ const DashboardFilters: React.FC<{
             <option value="90d">Last 90 days</option>
             <option value="1y">Last year</option>
           </select>
-
         </div>
         <button 
           onClick={onFilter}
@@ -202,8 +497,9 @@ const DashboardFilters: React.FC<{
 
 const RecentBookings: React.FC<{
   bookings: RecentBooking[];
+  loading: boolean;
   onViewAll: () => void;
-}> = ({ bookings, onViewAll }) => {
+}> = ({ bookings, loading, onViewAll }) => {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'confirmed':
@@ -217,6 +513,21 @@ const RecentBookings: React.FC<{
     }
   };
 
+  if (loading) {
+    return (
+      <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+        <div className="animate-pulse">
+          <div className="h-6 bg-gray-200 rounded mb-4"></div>
+          <div className="space-y-3">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="h-16 bg-gray-100 rounded"></div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
       <div className="flex items-center justify-between mb-6">
@@ -229,21 +540,25 @@ const RecentBookings: React.FC<{
         </button>
       </div>
       <div className="space-y-4">
-        {bookings.map((booking) => (
-          <div key={booking.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-            <div className="flex-1">
-              <h3 className="font-medium text-gray-900">{booking.customer}</h3>
-              <p className="text-sm text-gray-600">{booking.tour}</p>
-              <p className="text-xs text-gray-500">{booking.date}</p>
+        {bookings.length === 0 ? (
+          <p className="text-gray-500 text-center py-8">No recent bookings found</p>
+        ) : (
+          bookings.map((booking) => (
+            <div key={booking.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+              <div className="flex-1">
+                <h3 className="font-medium text-gray-900">{booking.customer}</h3>
+                <p className="text-sm text-gray-600">{booking.tour}</p>
+                <p className="text-xs text-gray-500">{booking.date}</p>
+              </div>
+              <div className="text-right">
+                <p className="font-semibold text-gray-900">₱{booking.amount.toLocaleString()}</p>
+                <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(booking.status)}`}>
+                  {booking.status}
+                </span>
+              </div>
             </div>
-            <div className="text-right">
-              <p className="font-semibold text-gray-900">₱{booking.amount}</p>
-              <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(booking.status)}`}>
-                {booking.status}
-              </span>
-            </div>
-          </div>
-        ))}
+          ))
+        )}
       </div>
     </div>
   );
@@ -251,8 +566,24 @@ const RecentBookings: React.FC<{
 
 const TopTours: React.FC<{
   tours: TopTour[];
+  loading: boolean;
   onManage: () => void;
-}> = ({ tours, onManage }) => {
+}> = ({ tours, loading, onManage }) => {
+  if (loading) {
+    return (
+      <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+        <div className="animate-pulse">
+          <div className="h-6 bg-gray-200 rounded mb-4"></div>
+          <div className="space-y-3">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="h-16 bg-gray-100 rounded"></div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
       <div className="flex items-center justify-between mb-6">
@@ -265,31 +596,35 @@ const TopTours: React.FC<{
         </button>
       </div>
       <div className="space-y-4">
-        {tours.map((tour, index) => (
-          <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-            <div className="flex-1">
-              <h3 className="font-medium text-gray-900">{tour.name}</h3>
-              <div className="flex items-center space-x-4 mt-1">
-                <span className="text-sm text-gray-600">{tour.bookings} bookings</span>
-                <div className="flex items-center space-x-1">
-                  <Star className="h-4 w-4 text-yellow-400 fill-current" />
-                  <span className="text-sm text-gray-600">{tour.rating}</span>
+        {tours.length === 0 ? (
+          <p className="text-gray-500 text-center py-8">No tour data available</p>
+        ) : (
+          tours.map((tour, index) => (
+            <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+              <div className="flex-1">
+                <h3 className="font-medium text-gray-900">{tour.name}</h3>
+                <div className="flex items-center space-x-4 mt-1">
+                  <span className="text-sm text-gray-600">{tour.bookings} bookings</span>
+                  <div className="flex items-center space-x-1">
+                    <Star className="h-4 w-4 text-yellow-400 fill-current" />
+                    <span className="text-sm text-gray-600">{tour.rating}</span>
+                  </div>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="font-semibold text-gray-900">₱{tour.revenue.toLocaleString()}</p>
+                <div className="flex items-center space-x-2 mt-1">
+                  <button className="p-1 text-gray-400 hover:text-blue-500">
+                    <Eye className="h-4 w-4" />
+                  </button>
+                  <button className="p-1 text-gray-400 hover:text-green-500">
+                    <Edit3 className="h-4 w-4" />
+                  </button>
                 </div>
               </div>
             </div>
-            <div className="text-right">
-              <p className="font-semibold text-gray-900">₱{tour.revenue.toLocaleString()}</p>
-              <div className="flex items-center space-x-2 mt-1">
-                <button className="p-1 text-gray-400 hover:text-blue-500">
-                  <Eye className="h-4 w-4" />
-                </button>
-                <button className="p-1 text-gray-400 hover:text-green-500">
-                  <Edit3 className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-          </div>
-        ))}
+          ))
+        )}
       </div>
     </div>
   );
@@ -297,7 +632,19 @@ const TopTours: React.FC<{
 
 const BookingChart: React.FC<{
   data: BookingData[];
-}> = ({ data }) => {
+  loading: boolean;
+}> = ({ data, loading }) => {
+  if (loading) {
+    return (
+      <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+        <div className="animate-pulse">
+          <div className="h-6 bg-gray-200 rounded mb-4"></div>
+          <div className="h-64 bg-gray-100 rounded"></div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
       <div className="flex items-center justify-between mb-6">
@@ -329,7 +676,19 @@ const BookingChart: React.FC<{
 
 const TourDistributionChart: React.FC<{
   data: TourDistribution[];
-}> = ({ data }) => {
+  loading: boolean;
+}> = ({ data, loading }) => {
+  if (loading) {
+    return (
+      <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+        <div className="animate-pulse">
+          <div className="h-6 bg-gray-200 rounded mb-4"></div>
+          <div className="h-64 bg-gray-100 rounded"></div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
       <h2 className="text-lg font-semibold text-gray-900 mb-6">Tour Categories</h2>
@@ -401,12 +760,9 @@ const QuickActions: React.FC<{
 };
 
 // Simple content components for different views
-const BookingsView: React.FC = () => (
-  <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-    <h2 className="text-2xl font-bold text-gray-900 mb-4">Bookings Management</h2>
-    <p className="text-gray-600">Here you can manage all your bookings, view details, and handle customer requests.</p>
-  </div>
-);
+const BookingsView: React.FC = () => {
+  return <BookingsManagement />;
+};
 
 const ToursView: React.FC = () => {
   return <ToursManagement />;
@@ -428,46 +784,18 @@ const SettingsView: React.FC = () => (
 );
 
 
-// Main Dashboard Component
+// Main Dashboard Component with Supabase Integration
 const Dashboard: React.FC = () => {
   const [selectedPeriod, setSelectedPeriod] = useState<TimePeriod>('7d');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [currentView, setCurrentView] = useState<string>('Dashboard');
 
-  // Sample data
-  const bookingData: BookingData[] = [
-    { name: 'Mon', bookings: 12, revenue: 2400 },
-    { name: 'Tue', bookings: 19, revenue: 1398 },
-    { name: 'Wed', bookings: 8, revenue: 3200 },
-    { name: 'Thu', bookings: 27, revenue: 2780 },
-    { name: 'Fri', bookings: 35, revenue: 4890 },
-    { name: 'Sat', bookings: 42, revenue: 6200 },
-    { name: 'Sun', bookings: 38, revenue: 5800 }
-  ];
-
-  const tourDistribution: TourDistribution[] = [
-    { name: 'Beach Tours', value: 35, color: '#3B82F6' },
-    { name: 'Mountain Tours', value: 25, color: '#10B981' },
-    { name: 'City Tours', value: 20, color: '#F59E0B' },
-    { name: 'Adventure Tours', value: 15, color: '#EF4444' },
-    { name: 'Cultural Tours', value: 5, color: '#8B5CF6' }
-  ];
-
-  const recentBookings: RecentBooking[] = [
-    { id: 1, customer: 'John Doe', tour: 'Bali Beach Paradise', date: '2024-07-15', amount: 599, status: 'confirmed' },
-    { id: 2, customer: 'Sarah Smith', tour: 'Tokyo City Adventure', date: '2024-07-16', amount: 899, status: 'pending' },
-    { id: 3, customer: 'Mike Johnson', tour: 'Swiss Alps Trek', date: '2024-07-17', amount: 1299, status: 'confirmed' },
-    { id: 4, customer: 'Emily Davis', tour: 'Rome Historical Tour', date: '2024-07-18', amount: 449, status: 'confirmed' },
-    { id: 5, customer: 'David Wilson', tour: 'Safari Adventure', date: '2024-07-19', amount: 1599, status: 'pending' }
-  ];
-
-  const topTours: TopTour[] = [
-    { name: 'Bali Beach Paradise', bookings: 156, revenue: 93600, rating: 4.8 },
-    { name: 'Tokyo City Adventure', bookings: 134, revenue: 120460, rating: 4.9 },
-    { name: 'Swiss Alps Trek', bookings: 89, revenue: 115611, rating: 4.7 },
-    { name: 'Rome Historical Tour', bookings: 112, revenue: 50288, rating: 4.6 },
-    { name: 'Safari Adventure', bookings: 78, revenue: 124722, rating: 4.9 }
-  ];
+  // Use custom hooks for data fetching
+  const { stats, loading: statsLoading, error: statsError } = useDashboardStats();
+  const { data: bookingData, loading: chartLoading } = useBookingTrends(selectedPeriod);
+  const { bookings: recentBookings, loading: bookingsLoading } = useRecentBookings(5);
+  const { tours: topTours, loading: toursLoading } = useTopTours(5);
+  const { data: tourDistribution, loading: distributionLoading } = useTourDistribution();
 
   // Navigation handler
   const handleNavigation = (viewName: string) => {
@@ -478,27 +806,34 @@ const Dashboard: React.FC = () => {
   const handlePeriodChange = (period: TimePeriod) => {
     setSelectedPeriod(period);
   };
+
   const handleFilter = () => console.log('Filter clicked');
+  
   const handleViewAll = () => {
     setCurrentView('Bookings');
     console.log('View all bookings clicked');
   };
+  
   const handleManageTours = () => {
     setCurrentView('Tours');
     console.log('Manage tours clicked');
   };
+  
   const handleCreateTour = () => {
     setCurrentView('Tours');
     console.log('Create tour clicked');
   };
+  
   const handleManageBookings = () => {
     setCurrentView('Bookings');
     console.log('Manage bookings clicked');
   };
+  
   const handleViewAgents = () => {
     setCurrentView('Agents');
     console.log('View Agents clicked');
   };
+  
   const handleCustomerSupport = () => {
     setCurrentView('Customers');
     console.log('Customer support clicked');
@@ -516,7 +851,6 @@ const Dashboard: React.FC = () => {
         return <AgentsView />;
       case 'Settings':
         return <SettingsView />;
-
       default:
         return (
           <>
@@ -527,48 +861,78 @@ const Dashboard: React.FC = () => {
               onFilter={handleFilter}
             />
 
+            {/* Error Display */}
+            {statsError && (
+              <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-red-700">Error loading dashboard data: {statsError}</p>
+              </div>
+            )}
+
             {/* Stats Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-              <StatCard
-                title="Total Bookings"
-                value="1,234"
-                change={12.5}
-                icon={Calendar}
-                color="bg-blue-500"
-              />
-              <StatCard
-                title="Total Revenue"
-                value="₱89,432"
-                change={8.2}
-                icon={DollarSign}
-                color="bg-green-500"
-              />
-              <StatCard
-                title="Active Tours"
-                value="42"
-                change={-2.4}
-                icon={MapPin}
-                color="bg-purple-500"
-              />
-              <StatCard
-                title="Total Customers"
-                value="2,854"
-                change={15.3}
-                icon={Users}
-                color="bg-orange-500"
-              />
+              {statsLoading ? (
+                // Loading skeletons
+                [...Array(4)].map((_, i) => (
+                  <div key={i} className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                    <div className="animate-pulse">
+                      <div className="h-12 bg-gray-200 rounded mb-4"></div>
+                      <div className="h-8 bg-gray-200 rounded mb-2"></div>
+                      <div className="h-4 bg-gray-200 rounded"></div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <>
+                  <StatCard
+                    title="Total Bookings"
+                    value={stats.totalBookings.toLocaleString()}
+                    change={stats.bookingsChange}
+                    icon={Calendar}
+                    color="bg-blue-500"
+                  />
+                  <StatCard
+                    title="Total Revenue"
+                    value={`₱${stats.totalRevenue.toLocaleString()}`}
+                    change={stats.revenueChange}
+                    icon={DollarSign}
+                    color="bg-green-500"
+                  />
+                  <StatCard
+                    title="Active Tours"
+                    value={stats.activeTours.toString()}
+                    change={stats.toursChange}
+                    icon={MapPin}
+                    color="bg-purple-500"
+                  />
+                  <StatCard
+                    title="Total Customers"
+                    value={stats.totalCustomers.toLocaleString()}
+                    change={stats.customersChange}
+                    icon={Users}
+                    color="bg-orange-500"
+                  />
+                </>
+              )}
             </div>
 
             {/* Charts Section */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-              <BookingChart data={bookingData} />
-              <TourDistributionChart data={tourDistribution} />
+              <BookingChart data={bookingData} loading={chartLoading} />
+              <TourDistributionChart data={tourDistribution} loading={distributionLoading} />
             </div>
 
             {/* Tables Section */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-              <RecentBookings bookings={recentBookings} onViewAll={handleViewAll} />
-              <TopTours tours={topTours} onManage={handleManageTours} />
+              <RecentBookings 
+                bookings={recentBookings} 
+                loading={bookingsLoading}
+                onViewAll={handleViewAll} 
+              />
+              <TopTours 
+                tours={topTours} 
+                loading={toursLoading}
+                onManage={handleManageTours} 
+              />
             </div>
 
             {/* Quick Actions */}
@@ -620,7 +984,7 @@ const Dashboard: React.FC = () => {
 
         {/* Dashboard Content */}
         <div className="p-4 overflow-y-auto" style={{ height: 'calc(100vh - 80px)' }}>
-          <div className="max-w-6l mx-auto pb-7">
+          <div className="max-w-6xl mx-auto pb-7">
             {renderContent()}
           </div>
         </div>
