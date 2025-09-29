@@ -7,6 +7,23 @@ export interface DateRange {
 export interface Database {
   public: {
     Tables: {
+      package_dates: {
+        Row: {
+          date_id: number;
+          package_id: number;
+          available_Date: any[];
+        }
+      }
+      package_details: {
+        Row: {
+          detail_id: number;
+          package_id: number;
+          itinerary: string;
+          side_locations: any[];
+          inclusions: any[];
+          image_url: string;
+        }
+      }
       packages: {
         Row: {
           id: number

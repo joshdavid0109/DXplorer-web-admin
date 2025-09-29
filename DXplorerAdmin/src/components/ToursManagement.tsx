@@ -79,8 +79,8 @@ const getAvailableDates = (tour: Tour) => {
     }
 
     // Case 2: Flat array of dates
-    if (first?.start && first?.end) {
-      return tour.available_dates.map(date => ({
+    if (first?.available_Date && Array.isArray(first.available_Date) && first.available_Date.length > 0) {
+      return first.available_Date.map((date: any) => ({
         start: date.start,
         end: date.end,
         remaining_slots: parseInt(date.remaining_slots?.toString() || '0', 10)
@@ -564,7 +564,7 @@ const handleEditTour = (tour: Tour) => {
   setFormData({
     destination: getDestination(tour),
     price: tour.price,
-    image_url: imageUrl,
+    image_url: imageUrl || '',
     itinerary: getItinerary(tour),
     side_locations: sideLocations,
     inclusions: inclusions,
@@ -609,7 +609,7 @@ const handleEditTour = (tour: Tour) => {
     console.log('Setting viewingTour:', tour);
     
     // Add null check and defensive programming
-    if (!tour || !tour.id) {
+    if (!tour || !tour.package_id) {
       console.error('Invalid tour object:', tour);
       alert('Error: Invalid tour data');
       return;
@@ -815,7 +815,7 @@ const handleEditTour = (tour: Tour) => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {packages.map((tour) => (
           console.log('Rendering tour:', tour),
-          <div key={tour.id} className="group bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-xl hover:border-gray-200 transition-all duration-300 hover:-translate-y-1">
+          <div key={tour.package_id} className="group bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-xl hover:border-gray-200 transition-all duration-300 hover:-translate-y-1">
             <div className="relative overflow-hidden">
               <img
                 src={getImageUrl(tour)} // Use helper function

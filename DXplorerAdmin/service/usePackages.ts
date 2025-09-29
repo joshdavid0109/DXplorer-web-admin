@@ -1,9 +1,6 @@
 import { useState, useEffect } from 'react'
 import { packagesService, type ExtendedPackage } from './packagesService'
-import type { Database } from '../lib/types'
 
-type PackageInsert = Database['public']['Tables']['packages']['Insert']
-type PackageUpdate = Database['public']['Tables']['packages']['Update']
 
 export const usePackages = () => {
   const [packages, setPackages] = useState<ExtendedPackage[]>([])
@@ -34,8 +31,8 @@ export const usePackages = () => {
       const transformed = {
         ...pkg,
         id: pkg.package_id, // ADD THIS LINE - map package_id to id
-        destination: pkg.destination || pkg.main_location || 'Unknown Location', // ADD THIS LINE
-        image_url: pkg.image_uri || pkg.image || '', // ADD THIS LINE
+        destination: pkg.main_location || 'Unknown Location', // ADD THIS LINE
+        image_url: pkg.image_url || '', // ADD THIS LINE
         package_details: packageDetails,
         side_locations: pkg.side_locations || packageDetails?.side_locations || [],
         inclusions: pkg.inclusions || packageDetails?.inclusions || [],

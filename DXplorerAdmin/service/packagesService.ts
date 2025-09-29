@@ -2,13 +2,11 @@ import { supabase } from '../lib/supabase'
 import type { Database } from '../lib/types'
 
 type Package = Database['public']['Tables']['packages']['Row']
-type PackageInsert = Database['public']['Tables']['packages']['Insert']
-type PackageUpdate = Database['public']['Tables']['packages']['Update']
 type PackageDate = Database['public']['Tables']['package_dates']['Row']
 type PackageDetail = Database['public']['Tables']['package_details']['Row']
 
 // Extended package type with joined data
-export interface ExtendedPackage extends Package {
+export interface ExtendedPackage extends Omit<Package, 'itinerary' | 'side_locations' | 'inclusions' | 'available_dates'> {
   package_id: number
   available_dates: PackageDate[]
   package_details: PackageDetail | null
@@ -441,7 +439,7 @@ updatePackage: async (id: number, packageData: any): Promise<ExtendedPackage> =>
       detailUpdates.package_id = id;
       const { error: detailsError } = await supabase
         .from('package_details')
-        .upsert(detailUpdates, { onConflict: ['package_id'] });
+        .upsert(detailUpdates, { onConflict: 'package_id' });
       if (detailsError) throw new Error(`Failed to update package details: ${detailsError.message}`);
     }
 
@@ -462,8 +460,8 @@ updatePackage: async (id: number, packageData: any): Promise<ExtendedPackage> =>
         
         // Check if arrays are different (either different length or different content)
         const arraysAreDifferent = existingDateStrings.length !== newDateStrings.length ||
-          !existingDateStrings.every(date => newDateStrings.includes(date)) ||
-          !newDateStrings.every(date => existingDateStrings.includes(date));
+          !existingDateStrings.every((date: any) => newDateStrings.includes(date)) ||
+          !newDateStrings.every((date: any) => existingDateStrings.includes(date));
         
         if (arraysAreDifferent) {
           if (newDates.length === 0) {
