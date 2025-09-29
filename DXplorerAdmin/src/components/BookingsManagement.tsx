@@ -5,19 +5,15 @@ import {
   Edit, 
   Trash2, 
   Calendar,
-  Filter,
   Download,
-  Eye,
   X,
   Save,
   User,
   Package,
   Clock,
-  MapPin,
   CheckCircle,
   XCircle,
   AlertCircle,
-  DollarSign
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
@@ -128,7 +124,6 @@ const BookingsManagement: React.FC = () => {
     // Combine the data
     const transformedBookings = bookingsData?.map(booking => {
       const customer = customersMap.get(booking.user_id);
-      const packageInfo = booking.package_id ? packagesMap.get(booking.package_id) : null;
 
       
       return {
@@ -157,7 +152,7 @@ const BookingsManagement: React.FC = () => {
   try {
     const { data, error } = await supabase
       .from('packages')
-      .select('package_id, price, main_location')
+      .select('package_id, package_name, price, main_location')
       .eq('status', 'active');
     
     if (error) {
@@ -246,7 +241,7 @@ const BookingsManagement: React.FC = () => {
       await fetchBookings();
     } catch (error) {
       console.error('Error saving booking:', error);
-      alert(`Error saving booking: ${error.message}`);
+      alert(`Error deleting agent: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -264,7 +259,7 @@ const BookingsManagement: React.FC = () => {
         await fetchBookings();
       } catch (error) {
         console.error('Error deleting booking:', error);
-        alert(`Error deleting booking: ${error.message}`);
+        alert(`Error deleting agent: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
     }
   };

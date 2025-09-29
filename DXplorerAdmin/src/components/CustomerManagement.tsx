@@ -6,11 +6,8 @@ import {
   Trash2, 
   Mail, 
   Phone, 
-  MapPin, 
   Calendar,
-  Filter,
   Download,
-  MoreVertical,
   X,
   Save,
   User
@@ -94,7 +91,7 @@ const fetchCustomers = async () => {
         console.log('Client user IDs types:', clientUserIds.map(id => typeof id));
         
         // Let's also check what user_ids exist in profiles
-        const { data: allProfilesCheck, error: allProfilesError } = await supabase
+        const { data: allProfilesCheck } = await supabase
             .from('user_profiles')
             .select('user_id');
         console.log('All user_ids in profiles:', allProfilesCheck?.map(p => p.user_id));
@@ -127,7 +124,7 @@ const fetchCustomers = async () => {
             console.log('No profiles found with .in() query, trying alternative...');
             
             // Try getting all profiles and filtering in JavaScript
-            const { data: allProfiles, error: allProfilesErr } = await supabase
+            const { data: allProfiles} = await supabase
                 .from('user_profiles')
                 .select('*');
             
@@ -171,7 +168,7 @@ const fetchCustomers = async () => {
         });
         
         // Check for duplicates
-        const userIdCounts = {};
+        const userIdCounts: Record<string, number> = {};
         profilesData?.forEach(profile => {
             userIdCounts[profile.user_id] = (userIdCounts[profile.user_id] || 0) + 1;
         });
@@ -179,7 +176,7 @@ const fetchCustomers = async () => {
         console.log('=== DUPLICATE CHECK ===');
         console.log('User ID counts in profiles:', userIdCounts);
         
-        const duplicates = Object.entries(userIdCounts).filter(([userId, count]) => count > 1);
+        const duplicates = Object.entries(userIdCounts).filter(([, count]) => count > 1);
         if (duplicates.length > 0) {
             console.warn('FOUND DUPLICATE PROFILES:', duplicates);
             console.warn('Some users have multiple profiles in user_profiles table!');
@@ -278,7 +275,7 @@ const fetchCustomers = async () => {
                 const { status, ...profileData } = formData;
                 
                 // Check if user already exists in users table (for existing auth users)
-                const { data: existingUser, error: checkError } = await supabase
+                const { data: existingUser} = await supabase
                     .from('users')
                     .select('id')
                     .eq('email', formData.email_address)
@@ -355,8 +352,8 @@ const fetchCustomers = async () => {
             
             } catch (error) {
             console.error('Error deleting customer:', error);
-            alert(`Error deleting customer: ${error.message}`);
-            }
+            alert(`Error deleting agent: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          }
         }
         };
 

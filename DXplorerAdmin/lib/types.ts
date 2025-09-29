@@ -1,3 +1,9 @@
+export interface DateRange {
+  start: string;
+  end: string;
+  remaining_slots: number;
+}
+
 export interface Database {
   public: {
     Tables: {

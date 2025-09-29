@@ -1,6 +1,5 @@
 // App.js
-import React, { useState, useEffect } from 'react';
-import { Globe } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import Dashboard from './dashboard';
 
@@ -54,7 +53,7 @@ const AuthComponent = () => {
           const { error } = await supabase.auth.signUp({ email, password });
           if (error) throw error;
         }
-      } catch (err) {
+      } catch (err: any) {
         setError(err.message || 'Authentication failed');
       } finally {
         setLoading(false);
@@ -159,7 +158,7 @@ const AuthComponent = () => {
 };
 
 const App = () => {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -210,10 +209,7 @@ const App = () => {
     };
   }, []);
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
-  };
+
 
   if (loading) {
     return (
@@ -233,7 +229,7 @@ const App = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <main className="flex-1">
-        <Dashboard user={user} handleLogout={handleLogout} />
+        <Dashboard />
       </main>
     </div>
   );

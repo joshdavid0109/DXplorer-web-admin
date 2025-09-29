@@ -6,18 +6,13 @@ import {
   Trash2, 
   Mail, 
   Phone, 
-  MapPin, 
   Calendar,
-  Filter,
   Download,
-  MoreVertical,
   X,
   Save,
   User,
-  Shield,
   Star,
   TrendingUp,
-  Clock
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase'; // Adjust the import path as necessary
 
@@ -260,14 +255,36 @@ const fetchAgents = async () => {
         // Create new agent (similar updates for create flow)
         const { status, promo_code, discount_rate, promo_expiry, promo_status, ...profileData } = formData;
         
-        // ... existing user creation logic ...
+        // Create user first to get user_id
+        const { data: userData, error: userError } = await supabase
+          .from('users')
+          .insert([{
+            email: formData.email_address,
+            status: status,
+            role: 'agent'
+          }])
+          .select('user_id')
+          .single();
+        
+        if (userError) throw userError;
+        
+        // Create user profile
+        const { error: profileError } = await supabase
+          .from('user_profiles')
+          .insert([{
+            ...profileData,
+            user_id: userData.user_id,
+            hire_date: profileData.hire_date || new Date().toISOString().split('T')[0]
+          }]);
+        
+        if (profileError) throw profileError;
         
         // Create promo if promo_code exists
-        if (promo_code && userId) {
+        if (promo_code && userData.user_id) {
           const { error: promoError } = await supabase
             .from('promos')
             .insert([{
-              user_id: userId,
+              user_id: userData.user_id,
               promo_code,
               discount_rate: discount_rate || 10,
               promo_expiry: promo_expiry || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
@@ -312,7 +329,7 @@ const fetchAgents = async () => {
         
       } catch (error) {
         console.error('Error deleting agent:', error);
-        alert(`Error deleting agent: ${error.message}`);
+        alert(`Error deleting agent: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
     }
   };

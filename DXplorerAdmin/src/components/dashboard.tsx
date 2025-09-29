@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, DollarSign, MapPin, Users, Star, Eye, Edit3, Plus, Filter, BarChart3, PieChart, Globe, TrendingUp, Settings, Menu, X, LogOutIcon } from 'lucide-react';
+import { Calendar, DollarSign, MapPin, Users, Star, Eye, Edit3, Plus, Filter, BarChart3, TrendingUp, Settings, Menu, X, LogOutIcon } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart as RechartsPieChart, Cell, Pie } from 'recharts';
 import ToursManagement from './ToursManagement.tsx';
 import { supabase } from '../../lib/supabase';
@@ -176,8 +176,8 @@ const useBookingTrends = (period: TimePeriod) => {
           }
           
           acc[key].bookings += 1;
-          if (booking.payments && booking.payments.status === 'completed') {
-            acc[key].revenue += booking.payments.amount || 0;
+          if (booking.payments && Array.isArray(booking.payments) && booking.payments.length > 0 && booking.payments[0].status === 'completed') {
+            acc[key].revenue += booking.payments[0].amount || 0;
           }
           
           return acc;

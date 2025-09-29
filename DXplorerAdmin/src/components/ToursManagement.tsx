@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { AlertCircle, CheckCircle, MapPin, Edit3, Eye, Plus, Search, Filter, Star, Calendar, DollarSign, Users, Upload, Trash2, Image, X, Clock, Moon } from 'lucide-react';
 import { usePackages } from '../../service/usePackages'; // Import your custom hook
 import type { ExtendedPackage } from '../../service/packagesService'; // Import the ExtendedPackage type
-import type { Database } from '../../lib/types'; // Import the Database type
 import { supabase } from '../../lib/supabase';
 
 type Tour = ExtendedPackage; // Use the ExtendedPackage type for Tour
@@ -14,8 +13,6 @@ interface DateRange {
   remaining_slots: number;
 }
 
-// Use the database type
-type TourInsert = Database['public']['Tables']['packages']['Insert'];
 
 // Update the form data interface to match database fields
 interface TourFormData {
@@ -43,7 +40,6 @@ const ToursManagement: React.FC = () => {
   const [editingTour, setEditingTour] = useState<Tour | null>(null);
   const [viewingTour, setViewingTour] = useState<Tour | null>(null);
   const [showViewModal, setShowViewModal] = useState(false);
-  const [dateRangeInput, setDateRangeInput] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [sideLocationInputs, setSideLocationInputs] = useState(['']);
@@ -54,12 +50,11 @@ const ToursManagement: React.FC = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [imageError, setImageError] = useState('');
   const fileInputRef = useRef(null);
-  const [uploadedImageUrl, setUploadedImageUrl] = useState('');
 
 const getDestination = (tour: Tour) => {
   if (!tour) return 'Unknown Location';
   try {
-    return tour.destination || tour.main_location || 'Unknown Location';
+    return tour.main_location || 'Unknown Location';
   } catch (error) {
     console.error('Error getting destination:', error);
     return 'Unknown Location';
@@ -76,7 +71,7 @@ const getAvailableDates = (tour: Tour) => {
 
     // Case 1: Nested available_Date array
     if (first?.available_Date && Array.isArray(first.available_Date)) {
-      return first.available_Date.map(date => ({
+      return first.available_Date.map((date: any) => ({
         start: date.start,
         end: date.end,
         remaining_slots: parseInt(date.remaining_slots?.toString() || '0', 10)
@@ -122,9 +117,9 @@ const getSideLocations = (tour: Tour) => {
     }
     
     // Flatten and clean the side_locations array
-    const flattenedLocations = [];
+    const flattenedLocations: string[] = [];
     
-    const processItem = (item) => {
+    const processItem = (item: any) => {
       if (typeof item === 'string') {
         return item;
       } else if (typeof item === 'object' && item !== null) {
@@ -135,7 +130,7 @@ const getSideLocations = (tour: Tour) => {
       return null;
     };
     
-    const flattenArray = (arr) => {
+    const flattenArray = (arr: any[]) => {
       for (const item of arr) {
         if (Array.isArray(item)) {
           flattenArray(item);
@@ -180,9 +175,9 @@ const getInclusions = (tour: Tour) => {
       }
     }
     
-    const processedInclusions = [];
+    const processedInclusions: string[] = [];
     
-    const processItem = (item) => {
+    const processItem = (item: any) => {
       if (typeof item === 'string') {
         return [item];
       } else if (typeof item === 'object' && item !== null) {
@@ -206,7 +201,7 @@ const getInclusions = (tour: Tour) => {
       return [];
     };
     
-    const flattenArray = (arr) => {
+    const flattenArray = (arr: any[]) => {
       for (const item of arr) {
         if (Array.isArray(item)) {
           flattenArray(item);
@@ -251,7 +246,7 @@ const getItinerary = (tour: Tour) => {
   }
 };
 
-const validateFile = (file) => {
+const validateFile = (file: any) => {
   const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
   const maxSize = 5 * 1024 * 1024; // 5MB
   
@@ -266,33 +261,8 @@ const validateFile = (file) => {
   return null;
 };
 
-const checkExistingBuckets = async () => {
-   try {
-    // Check authentication first
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      console.error('User not authenticated');
-      return;
-    }
 
-    // Try to list files in the packages bucket
-    const { data: files, error } = await supabase.storage
-      .from('packages')
-      .list();
-    
-    if (error) {
-      console.error('Error accessing packages bucket:', error);
-      console.error('Error details:', error.message);
-    } else {
-      console.log('Successfully accessed packages bucket');
-      console.log('Files:', files);
-    }
-  } catch (error) {
-    console.error('Unexpected error:', error);
-  }
-};
-
-const uploadImageToSupabase = async (file) => {
+const uploadImageToSupabase = async (file: any) => {
   try {
     setImageError('');
     setUploadProgress(0);
@@ -349,13 +319,13 @@ const uploadImageToSupabase = async (file) => {
 };
 
 // Drag and drop handlers
-const handleDragOver = (e) => {
+const handleDragOver = (e: any) => {
   e.preventDefault();
   e.stopPropagation();
   setIsDragging(true);
 };
 
-const handleDragLeave = (e) => {
+const handleDragLeave = (e: any) => {
   e.preventDefault();
   e.stopPropagation();
   
@@ -365,7 +335,7 @@ const handleDragLeave = (e) => {
   }
 };
 
-const handleDrop = async (e) => {
+const handleDrop = async (e: any) => {
   e.preventDefault();
   e.stopPropagation();
   setIsDragging(false);
@@ -376,7 +346,7 @@ const handleDrop = async (e) => {
   }
 };
 
-const handleFileSelect = async (e) => {
+const handleFileSelect = async (e: any) => {
   const file = e.target.files[0];
   if (file) {
     console.log('File selected:', file.name);
@@ -384,7 +354,7 @@ const handleFileSelect = async (e) => {
   }
 };
 
-const handleFileUpload = async (file) => {
+const handleFileUpload = async (file: any) => {
   setUploadProgress(10);
   setImageError('');
 
@@ -404,7 +374,6 @@ const handleFileUpload = async (file) => {
 
     if (imageUrl) {
       // Set both the uploaded image URL and update formData
-      setUploadedImageUrl(imageUrl);
       setFormData(prev => ({
         ...prev,
         image_url: imageUrl
@@ -445,8 +414,8 @@ const getImageUrl = (tour: Tour) => {
         return tour.image_url;
     }
 
-    if (tour.image) {
-        return tour.image;
+    if (tour.image_url) {
+        return tour.image_url;
     }
 
     // If no image is found in any expected location
@@ -460,7 +429,7 @@ const addSideLocationInput = () => {
   setSideLocationInputs([...sideLocationInputs, '']);
 };
 
-const removeSideLocationInput = (index) => {
+const removeSideLocationInput = (index: any) => {
   if (sideLocationInputs.length > 1) {
     const newInputs = sideLocationInputs.filter((_, i) => i !== index);
     setSideLocationInputs(newInputs);
@@ -469,7 +438,7 @@ const removeSideLocationInput = (index) => {
   }
 };
 
-const updateSideLocationInput = (index, value) => {
+const updateSideLocationInput = (index: number, value: string) => {
   const newInputs = [...sideLocationInputs];
   newInputs[index] = value;
   setSideLocationInputs(newInputs);
@@ -481,11 +450,11 @@ const addInclusionInput = () => {
   setInclusionInputs([...inclusionInputs, { item: '', note: '' }]);
 };
 
-const removeInclusionInput = (index) => {
+const removeInclusionInput = (index: number) => {
   setInclusionInputs(inclusionInputs.filter((_, i) => i !== index));
 };
 
-const updateInclusionInput = (index, field, value) => {
+const updateInclusionInput = (index: number, field: keyof { item: string; note: string }, value: string) => {
   const updated = [...inclusionInputs];
   updated[index][field] = value;
   setInclusionInputs(updated);
@@ -507,7 +476,7 @@ const addDateRangeInput = () => {
   setDateRangeInputs([...dateRangeInputs, { start: '', end: '', slots: 1 }]);
 };
 
-const removeDateRangeInput = (index) => {
+const removeDateRangeInput = (index: number) => {
   if (dateRangeInputs.length > 1) {
     const newInputs = dateRangeInputs.filter((_, i) => i !== index);
     setDateRangeInputs(newInputs);
@@ -520,9 +489,9 @@ const removeDateRangeInput = (index) => {
   }
 };
 
-const updateDateRangeInput = (index, field, value) => {
+const updateDateRangeInput = (index: number, field: keyof { start: string; end: string; slots: number }, value: string) => {
   const newInputs = [...dateRangeInputs];
-  newInputs[index][field] = field === 'slots' ? parseInt(value) || 1 : value;
+  (newInputs[index] as any)[field] = field === 'slots' ? parseInt(value) || 1 : value;
   setDateRangeInputs(newInputs);
   const newDates = newInputs.filter(input => input.start && input.end).map(input => ({
     start: input.start,
@@ -566,7 +535,6 @@ useEffect(() => {
 
   const handleAddTour = () => {
   setEditingTour(null);
-  setUploadedImageUrl(''); // Reset uploaded image URL
   setFormData({
     destination: '',
     price: 0,
@@ -586,7 +554,7 @@ useEffect(() => {
   setShowModal(true);
 };
 
-const handleEditTour = (tour) => {
+const handleEditTour = (tour: Tour) => {
   setEditingTour(tour);
   const availableDates = getAvailableDates(tour);
   const sideLocations = getSideLocations(tour);
@@ -603,12 +571,11 @@ const handleEditTour = (tour) => {
     available_dates: availableDates,
     duration: tour.duration,
     nights: tour.nights,
-    status: tour.status,
+    status: tour.status?.toLowerCase() as 'active' | 'inactive' | 'archived',
     tour_type: tour.tour_type
   });
 
   // Set the uploaded image URL for preview
-  setUploadedImageUrl(imageUrl);
 
   // ... rest of the function remains the same
   const inclusionObjects = inclusions.map(inclusion => {
@@ -628,7 +595,7 @@ const handleEditTour = (tour) => {
   
   setSideLocationInputs(sideLocations.length > 0 ? sideLocations : ['']);
   setInclusionInputs(inclusionObjects.length > 0 ? inclusionObjects : [{ item: '', note: '' }]);
-  setDateRangeInputs(availableDates.length > 0 ? availableDates.map(date => ({
+  setDateRangeInputs(availableDates.length > 0 ? availableDates.map((date: any) => ({
     start: date.start,
     end: date.end,
     slots: date.remaining_slots
@@ -690,28 +657,28 @@ const handleEditTour = (tour) => {
     }
   };
 
-  const handleArrayInput = (value: string, field: 'side_locations' | 'inclusions') => {
-    const items = value.split(',').map(item => item.trim()).filter(item => item);
-    setFormData({ ...formData, [field]: items });
-  };
+  // const handleArrayInput = (value: string, field: 'side_locations' | 'inclusions') => {
+  //   const items = value.split(',').map(item => item.trim()).filter(item => item);
+  //   setFormData({ ...formData, [field]: items });
+  // };
 
-  const handleDateRangeInput = (value: string) => {
-    setDateRangeInput(value);
-    // Parse date ranges: "2024-08-15 to 2024-08-20 (10 slots), 2024-08-22 to 2024-08-27 (15 slots)"
-    const ranges = value.split(',').map(range => {
-      const match = range.trim().match(/(\d{4}-\d{2}-\d{2})\s+to\s+(\d{4}-\d{2}-\d{2})\s+\((\d+)\s+slots\)/);
-      if (match) {
-        return {
-          start: match[1],
-          end: match[2],
-          remaining_slots: parseInt(match[3])
-        };
-      }
-      return null;
-    }).filter(range => range !== null) as DateRange[];
-    
-    setFormData({ ...formData, available_dates: ranges });
-  };
+  // const handleDateRangeInput = (value: string) => {
+  //   setDateRangeInput(value);
+  //   // Parse date ranges: "2024-08-15 to 2024-08-20 (10 slots), 2024-08-22 to 2024-08-27 (15 slots)"
+  //   const ranges = value.split(',').map(range => {
+  //     const match = range.trim().match(/(\d{4}-\d{2}-\d{2})\s+to\s+(\d{4}-\d{2}-\d{2})\s+\((\d+)\s+slots\)/);
+  //     if (match) {
+  //       return {
+  //         start: match[1],
+  //         end: match[2],
+  //         remaining_slots: parseInt(match[3])
+  //       };
+  //     }
+  //     return null;
+  //   }).filter(range => range !== null) as DateRange[];
+  //   
+  //   setFormData({ ...formData, available_dates: ranges });
+  // };
 
   const getStatusColor = (status: string) => {
     const normalizedStatus = status.toLowerCase(); // Add this line
@@ -749,7 +716,7 @@ const handleEditTour = (tour) => {
       return 'No upcoming dates';
     }
     
-    const upcoming = availableDates.find(date => new Date(date.start) > now);
+    const upcoming = availableDates.find((date: any) => new Date(date.start) > now);
     return upcoming ? formatDateRange(upcoming) : 'No upcoming dates';
   };
 
@@ -1458,7 +1425,7 @@ const handleEditTour = (tour) => {
                 </div>
                 <div>
                   <h3 className="text-2xl font-bold">
-                    {viewingTour?.destination || 'Unknown Destination'}
+                    {getDestination(viewingTour)}
                   </h3>
                   <p className="text-blue-100 mt-1">Tour Package Details</p>
                 </div>
@@ -1472,7 +1439,7 @@ const handleEditTour = (tour) => {
                 <div className="relative rounded-2xl overflow-hidden">
                   <img
                     src={getImageUrl(viewingTour)}
-                    alt={viewingTour?.destination || 'Tour destination'}
+                    alt={getDestination(viewingTour)}
                     className="w-full h-48 object-cover rounded-lg  opacity-50"
                     onError={(e) => {
                       e.currentTarget.src = "/api/placeholder/800/400";
@@ -1639,7 +1606,7 @@ const handleEditTour = (tour) => {
                         const availableDates = getAvailableDates(viewingTour);
                         return availableDates && availableDates.length > 0 ? (
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                            {availableDates.map((dateRange, index) => (
+                            {availableDates.map((dateRange: any, index: number) => (
                               <div key={index} className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
                                 <div className="flex items-center justify-between">
                                   <div>
