@@ -2,6 +2,8 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import Dashboard from './dashboard';
+import logo from '../assets/DX.png'
+
 
 const AuthComponent = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -67,7 +69,7 @@ const AuthComponent = () => {
           <div className="text-center">
             <img
               className="mx-auto h-12 w-auto"
-              src="../src/assets/DX.png" // Replace with your logo path
+              src={logo} // Replace with your logo path
               alt="DXplorer Logo"></img>
             <h2 className="mt-6 text-3xl font-extrabold text-gray-900">
               {`Admin`}
