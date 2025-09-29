@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabase';
 import CustomerManagement from './CustomerManagement.tsx';
 import AgentManagement from './AgentManagement.tsx';
 import BookingsManagement from './BookingsManagement.tsx';
+import logo from '../assets/DX.png'
 
 // Types
 interface BookingData {
@@ -384,7 +385,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onNavigate, activeIt
 
     if (item.name === 'Log out') {
       supabase.auth.signOut().then(() => {
-        window.location.href = '/App';
+        window.location.href = '/';
       }).catch((error) => {
         console.error('Logout failed:', error);
       });
@@ -415,8 +416,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onNavigate, activeIt
           <div className="flex items-center space-x-2 mb-8">
             <div className="p-2 rounded-lg"> 
               <img 
-                src={'../src/assets/logo.png'}
-                alt="DXplorer Logo" 
+                src={logo}
+                alt="DXplorer" 
                 className="w-full h-auto object-contain max-w-21 max-h-17"
               />
             </div>

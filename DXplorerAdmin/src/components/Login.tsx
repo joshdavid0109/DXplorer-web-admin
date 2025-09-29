@@ -67,7 +67,7 @@ const AuthComponent = () => {
           <div className="text-center">
             <img
               className="mx-auto h-12 w-auto"
-              src="../src/assets/dxlogo.png" // Replace with your logo path
+              src="../src/assets/DX.png" // Replace with your logo path
               alt="DXplorer Logo"></img>
             <h2 className="mt-6 text-3xl font-extrabold text-gray-900">
               {`Admin`}
