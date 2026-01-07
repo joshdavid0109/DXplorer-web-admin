@@ -38,6 +38,8 @@ interface Agent {
   discount_rate?: number;
   promo_expiry?: string;
   promo_status?: 'active' | 'inactive' | 'expired';
+  role?: 'agent' | 'manager';
+  manager_id?: string | null;
 }
 
 const AgentManagement: React.FC = () => {
@@ -62,15 +64,37 @@ const [formData, setFormData] = useState<Agent>({
   promo_code: '',
   discount_rate: 10,
   promo_expiry: '',
-  promo_status: 'active'
+  promo_status: 'active',
+  role: 'agent',        // NEW
+  manager_id: null      // NEW
 });
+
   
 const generatePromoCode = (firstName: string, lastName: string, discountRate: number = 10) => {
   const cleanFirstName = firstName.replace(/[^a-zA-Z]/g, '').slice(0, 4);
   const cleanLastName = lastName.replace(/[^a-zA-Z]/g, '');
-  const lastNameCode = cleanLastName.length > 0 ? cleanLastName.charAt(0) + 'C' : 'DC';
+  const lastNameCode = cleanLastName.length > 0 ? cleanLastName.charAt(0) + 'DX' : 'DX';
   
   return `${cleanFirstName}${lastNameCode}Explorer${discountRate}`;
+};
+
+const [managers, setManagers] = useState<Agent[]>([]);
+
+const fetchManagers = async () => {
+  const { data } = await supabase
+    .from('users')
+    .select('user_id')
+    .eq('role', 'manager');
+
+  if (!data) return setManagers([]);
+
+  // Load profiles for managers
+  const { data: profiles } = await supabase
+    .from('agents')
+    .select('*')
+    .in('user_id', data.map(u => u.user_id));
+
+  setManagers(profiles || []);
 };
 
   // Fetch agents
@@ -160,6 +184,7 @@ const fetchAgents = async () => {
 };
 
   useEffect(() => {
+    fetchManagers();
     fetchAgents();
   }, []);
 

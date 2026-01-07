@@ -31,7 +31,7 @@ interface TourFormData {
 
 const ToursManagement: React.FC = () => {
   // Replace useState with the custom hook
-  const { packages, loading, error, createPackage, updatePackage, deletePackage, filterPackages } = usePackages();
+  const { packages, loading, error, createPackage, updatePackage, deletePackage, filterPackages, allPackages} = usePackages();
   
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive' | 'archived'>('all');
@@ -62,34 +62,104 @@ const getDestination = (tour: Tour) => {
 };
 
 const getAvailableDates = (tour: Tour) => {
-  if (!tour || !tour.available_dates || !Array.isArray(tour.available_dates)) {
-    return [];
-  }
+  const normalize = (d: any) => {
+    if (!d) return null;
+    const start = d.start || d.start_date || d.from || null;
+    const end = d.end || d.end_date || d.to || null;
+    const remaining_slots = (() => {
+      const raw = d.remaining_slots ?? d.remainingSlots ?? d.slots ?? d.available_slots ?? 0;
+      const n = Number(raw);
+      return Number.isNaN(n) ? 0 : n;
+    })();
+
+    if (!start || !end) return null;
+    return { start, end, remaining_slots };
+  };
 
   try {
-    const first = tour.available_dates[0];
+    if (!tour) return [];
 
-    // Case 1: Nested available_Date array
-    if (first?.available_Date && Array.isArray(first.available_Date)) {
-      return first.available_Date.map((date: any) => ({
-        start: date.start,
-        end: date.end,
-        remaining_slots: parseInt(date.remaining_slots?.toString() || '0', 10)
-      }));
+    const out: { start: string; end: string; remaining_slots: number }[] = [];
+
+    // 1) Direct field (if some rows use available_dates)
+    if (Array.isArray((tour as any).available_dates) && (tour as any).available_dates.length) {
+      for (const item of (tour as any).available_dates) {
+        // item might already be {start,end,remaining_slots} or a wrapper
+        if (item && (item.start || item.end)) {
+          const n = normalize(item);
+          if (n) out.push(n);
+          continue;
+        }
+        // or item.available_Date inside
+        if (Array.isArray(item.available_Date)) {
+          for (const d of item.available_Date) {
+            const n = normalize(d);
+            if (n) out.push(n);
+          }
+        } else if (Array.isArray(item.available_Date || [])) {
+          for (const d of item.available_Date) {
+            const n = normalize(d);
+            if (n) out.push(n);
+          }
+        }
+      }
+      return out;
     }
 
-    // Case 2: Flat array of dates
-    if (first?.available_Date && Array.isArray(first.available_Date) && first.available_Date.length > 0) {
-      return first.available_Date.map((date: any) => ({
-        start: date.start,
-        end: date.end,
-        remaining_slots: parseInt(date.remaining_slots?.toString() || '0', 10)
-      }));
+    // 2) package_dates (your screenshot)
+    if (Array.isArray((tour as any).package_dates) && (tour as any).package_dates.length) {
+      for (const pd of (tour as any).package_dates) {
+        // common pattern: pd.available_Date (note capital D)
+        if (Array.isArray(pd.available_Date) && pd.available_Date.length) {
+          for (const d of pd.available_Date) {
+            const n = normalize(d);
+            if (n) out.push(n);
+          }
+          continue;
+        }
+
+        // fallback: pd.available_dates (lowercase)
+        if (Array.isArray(pd.available_dates) && pd.available_dates.length) {
+          for (const d of pd.available_dates) {
+            const n = normalize(d);
+            if (n) out.push(n);
+          }
+          continue;
+        }
+
+        // sometimes pd.available_Date is an object or nested differently
+        if (pd.available_Date && typeof pd.available_Date === 'object' && !Array.isArray(pd.available_Date)) {
+          const n = normalize(pd.available_Date);
+          if (n) out.push(n);
+        }
+      }
+
+      return out;
     }
 
-    return [];
-  } catch (error) {
-    console.error('Error getting available dates:', error);
+    // 3) last-resort: check top-level package_details for dates
+    if ((tour as any).package_details) {
+      const pd = (tour as any).package_details;
+      if (Array.isArray(pd)) {
+        for (const p of pd) {
+          if (Array.isArray(p.available_Date)) {
+            for (const d of p.available_Date) {
+              const n = normalize(d);
+              if (n) out.push(n);
+            }
+          }
+        }
+      } else if (pd.available_Date && Array.isArray(pd.available_Date)) {
+        for (const d of pd.available_Date) {
+          const n = normalize(d);
+          if (n) out.push(n);
+        }
+      }
+    }
+
+    return out;
+  } catch (err) {
+    console.error('getAvailableDates error:', err);
     return [];
   }
 };
@@ -520,18 +590,23 @@ useEffect(() => {
   console.log('Image URL in formData:', formData.image_url);
 }, [formData]);
 
-  // Filter tours whenever filters change
   useEffect(() => {
-    const debounceTimer = setTimeout(() => {
-      filterPackages({
-        searchTerm: searchTerm || undefined,
-        status: statusFilter !== 'all' ? statusFilter : undefined,
-        packageLabel: typeFilter !== 'all' ? typeFilter : undefined
-      });
-    }, 300);
+    // Don’t filter until data is loaded
+    if (allPackages.length === 0) return;
 
-    return () => clearTimeout(debounceTimer);
-  }, [searchTerm, statusFilter, typeFilter]);
+    const debounce = setTimeout(() => {
+      filterPackages({
+        searchTerm,
+        status: statusFilter,
+        packageLabel: typeFilter
+      });
+    }, 200);
+
+    return () => clearTimeout(debounce);
+  }, [searchTerm, statusFilter, typeFilter, allPackages]);
+
+
+
 
   const handleAddTour = () => {
   setEditingTour(null);

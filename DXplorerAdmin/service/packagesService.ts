@@ -7,7 +7,7 @@ type PackageDetail = Database['public']['Tables']['package_details']['Row']
 
 // Extended package type with joined data
 export interface ExtendedPackage extends Omit<Package, 'itinerary' | 'side_locations' | 'inclusions' | 'available_dates'> {
-  package_id: number
+  package_id: string
   available_dates: PackageDate[]
   package_details: PackageDetail | null
   itinerary: string | null
@@ -581,7 +581,7 @@ updatePackage: async (id: number, packageData: any): Promise<ExtendedPackage> =>
       
       // Apply filters if they exist
       if (filters.searchTerm && filters.searchTerm.trim()) {
-        query = query.ilike('destination', `%${filters.searchTerm.trim()}%`)
+        query = query.ilike('main_location', `%${filters.searchTerm.trim()}%`)
       }
       
       if (filters.status && filters.status !== 'all') {

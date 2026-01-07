@@ -1,134 +1,182 @@
-import { useState, useEffect } from 'react'
-import { packagesService, type ExtendedPackage } from './packagesService'
+import { useEffect, useState } from "react";
+import { supabase } from "../lib/supabase";
+import type { ExtendedPackage } from "./packagesService";
 
-
-export const usePackages = () => {
-  const [packages, setPackages] = useState<ExtendedPackage[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  const fetchPackages = async () => {
-  try {
-    setLoading(true)
-    setError(null)
-    
-    console.log('=== usePackages: Starting fetch ===')
-    const data = await packagesService.getPackages()
-    
-    console.log('=== usePackages: Received data ===')
-    console.log('Data length:', data.length)
-    console.log('Raw data from service:', JSON.stringify(data, null, 2))
-    
-    // Transform the data to ensure proper structure
-    const transformedData = data.map(pkg => {
-      console.log(`\n--- Processing package ${pkg.package_id} ---`)
-      
-      let packageDetails = pkg.package_details;
-      if (Array.isArray(packageDetails) && packageDetails.length > 0) {
-        packageDetails = packageDetails[0];
-      }
-      
-      const transformed = {
-        ...pkg,
-        id: pkg.package_id, // ADD THIS LINE - map package_id to id
-        destination: pkg.main_location || 'Unknown Location', // ADD THIS LINE
-        image_url: pkg.image_url || '', // ADD THIS LINE
-        package_details: packageDetails,
-        side_locations: pkg.side_locations || packageDetails?.side_locations || [],
-        inclusions: pkg.inclusions || packageDetails?.inclusions || [],
-        itinerary: pkg.itinerary || packageDetails?.itinerary || ''
-      };
-      
-      return transformed;
-    });
-
-    
-    setPackages(transformedData)
-    console.log('=== usePackages: State updated with transformed data ===')
-    
-  } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : 'Failed to fetch packages'
-    setError(errorMessage)
-    console.error('Fetch packages error:', err)
-  } finally {
-    setLoading(false)
-  }
+interface FilterOptions {
+  searchTerm?: string;
+  status?: string;
+  packageLabel?: string;
 }
 
-  const createPackage = async (packageData: any) => {
-    try {
-      setError(null)
-      const newPackage = await packagesService.createPackage(packageData)
-      setPackages(prev => [newPackage, ...prev])
-      return newPackage
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to create package'
-      setError(errorMessage)
-      console.error('Create package error:', err)
-      throw err
-    }
-  }
+export function usePackages() {
+  const [allPackages, setAllPackages] = useState<ExtendedPackage[]>([]);
+  const [packages, setPackages] = useState<ExtendedPackage[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const updatePackage = async (id: number, packageData: any) => {
-    try {
-      setError(null)
-      const updatedPackage = await packagesService.updatePackage(id, packageData)
-      setPackages(prev => prev.map(pkg =>
-        pkg.package_id === id ? { ...updatedPackage, id: updatedPackage.package_id } : pkg
-      ))
-      return updatedPackage
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to update package'
-      setError(errorMessage)
-      console.error('Update package error:', err)
-      throw err
-    }
-  }
+  // ------------------------------------------------------------------
+  // Fetch packages once (with related tables)
+  // ------------------------------------------------------------------
+  const fetchPackages = async () => {
+    setLoading(true);
 
-  const deletePackage = async (id: number) => {
-    try {
-      setError(null)
-      await packagesService.deletePackage(id)
-      setPackages(prev => prev.filter(pkg => pkg.package_id !== id))
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to delete package'
-      setError(errorMessage)
-      console.error('Delete package error:', err)
-      throw err
-    }
-  }
+    const { data, error } = await supabase
+      .from("packages")
+      .select(`
+        *,
+        package_details(*),
+        package_dates(*)
+      `)
+      .order("created_at", { ascending: false });
 
-  const filterPackages = async (filters: {
-    searchTerm?: string
-    status?: string
-    packageLabel?: string
-  }) => {
-    try {
-      setLoading(true)
-      setError(null)
-      const data = await packagesService.filterPackages(filters)
-      setPackages(data)
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to filter packages'
-      setError(errorMessage)
-      console.error('Filter packages error:', err)
-    } finally {
-      setLoading(false)
+    if (error) {
+      setError(error.message);
+      setLoading(false);
+      return;
     }
-  }
+
+    // Fetch booking counts
+    const { data: bookingCounts } = await supabase
+      .from("bookings")
+      .select("package_id, booking_id");
+
+    const bookingsMap: Record<string, number> = {};
+    bookingCounts?.forEach((b) => {
+      bookingsMap[b.package_id] = (bookingsMap[b.package_id] || 0) + 1;
+    });
+
+    // Attach counts to each package
+    const enriched = (data || []).map(pkg => ({
+      ...pkg,
+      bookings: bookingsMap[pkg.package_id] || 0
+    }));
+
+    setAllPackages(enriched);
+    setPackages(enriched);
+    setLoading(false);
+  };
 
   useEffect(() => {
-    fetchPackages()
-  }, [])
+    fetchPackages();
+  }, []);
+
+  useEffect(() => {
+    setPackages(allPackages);
+  }, [allPackages]);
+
+
+  // ------------------------------------------------------------------
+  // Instant client-side filtering
+  // ------------------------------------------------------------------
+  const filterPackages = (filters: FilterOptions) => {
+  // -----------------------------------------------
+  // 🔥 1. If search box is empty → show all packages
+  // -----------------------------------------------
+  if (!filters.searchTerm || filters.searchTerm.trim() === "") {
+    setPackages(allPackages);
+    return;
+  }
+
+  let filtered = [...allPackages];
+
+  // -----------------------------------------------
+  // 🔎 2. Apply search filter
+  // -----------------------------------------------
+  const q = filters.searchTerm.toLowerCase();
+  filtered = filtered.filter(pkg =>
+    pkg.main_location?.toLowerCase().includes(q)
+  );
+
+  // -----------------------------------------------
+  // 🟢 3. Status filter
+  // -----------------------------------------------
+  if (filters.status && filters.status !== "all") {
+    filtered = filtered.filter(pkg => pkg.status === filters.status);
+  }
+
+  // -----------------------------------------------
+  // 🔵 4. Tour type filter
+  // -----------------------------------------------
+  if (filters.packageLabel && filters.packageLabel !== "all") {
+    filtered = filtered.filter(pkg => pkg.tour_type === filters.packageLabel);
+  }
+
+  setPackages(filtered);
+};
+
+
+  // ------------------------------------------------------------------
+  // Sync UI list when DB changes
+  // ------------------------------------------------------------------
+  useEffect(() => {
+    setPackages(allPackages);
+  }, [allPackages]);
+
+  // ------------------------------------------------------------------
+  // CRUD
+  // ------------------------------------------------------------------
+  const createPackage = async (newData: any) => {
+    const { data, error } = await supabase
+      .from("packages")
+      .insert([
+        {
+          main_location: newData.destination,
+          price: newData.price,
+          duration: newData.duration,
+          nights: newData.nights,
+          status: newData.status,
+          tour_type: newData.tour_type,
+          image_url: newData.image_url,
+        }
+      ])
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    await fetchPackages();
+    return data;
+  };
+
+  const updatePackage = async (id: string, updatedData: any) => {
+    const { error } = await supabase
+      .from("packages")
+      .update({
+        main_location: updatedData.destination,
+        price: updatedData.price,
+        duration: updatedData.duration,
+        nights: updatedData.nights,
+        status: updatedData.status,
+        tour_type: updatedData.tour_type,
+        image_url: updatedData.image_url,
+      })
+      .eq("package_id", id);
+
+    if (error) throw error;
+
+    await fetchPackages();
+  };
+
+  const deletePackage = async (id: string) => {
+    const { error } = await supabase
+      .from("packages")
+      .delete()
+      .eq("package_id", id);
+
+    if (error) throw error;
+
+    await fetchPackages();
+  };
 
   return {
     packages,
+    allPackages,
     loading,
     error,
+    filterPackages,
     createPackage,
     updatePackage,
     deletePackage,
-    filterPackages,
-    refetch: fetchPackages
-  }
+    refresh: fetchPackages
+  };
 }

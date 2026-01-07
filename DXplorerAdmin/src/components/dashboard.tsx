@@ -1,12 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, DollarSign, MapPin, Users, Star, Eye, Edit3, Plus, Filter, BarChart3, TrendingUp, Settings, Menu, X, LogOutIcon } from 'lucide-react';
+import { Calendar, DollarSign, MapPin, Users, Star, Eye, Edit3, Plus, Filter, BarChart3, TrendingUp, Settings, Menu, X, LogOutIcon, ChevronDown, Layers, Route, Hotel, FerrisWheel, Bed, Car } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart as RechartsPieChart, Cell, Pie } from 'recharts';
 import ToursManagement from './ToursManagement.tsx';
 import { supabase } from '../../lib/supabase';
 import CustomerManagement from './CustomerManagement.tsx';
 import AgentManagement from './AgentManagement.tsx';
 import BookingsManagement from './BookingsManagement.tsx';
+import LandArrangementsManagement from './LandManagement.tsx';
 import logo from '../assets/DX.png'
+import AttractionsManagement from './AttractionsManagement.tsx';
+import AccommodationsManagement from './AccommodationsManagement.tsx';
+import CarRentalsManagement from './CarRentalsManagement.tsx';
 
 // Types
 interface BookingData {
@@ -48,9 +52,9 @@ interface StatCardProps {
 interface NavigationItem {
   name: string;
   icon: React.ComponentType<{ className?: string }>;
-  active?: boolean;
-  href?: string;
+  children?: NavigationItem[];
 }
+
 
 interface SidebarProps {
   isOpen: boolean;
@@ -368,22 +372,49 @@ const useTourDistribution = () => {
 
 // Enhanced Sidebar Component with Navigation (unchanged)
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onNavigate, activeItem }) => {
+    const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
+    Services: true,
+  });
+
+
+  const toggleGroup = (name: string) => {
+    setOpenGroups((prev) => ({
+      ...prev,
+      [name]: !prev[name],
+    }));
+  };
+
   const navigationItems: NavigationItem[] = [
-    { name: 'Dashboard', icon: BarChart3, href: '/dashboard' },
-    { name: 'Bookings', icon: Calendar, href: '/bookings' },
-    { name: 'Tours', icon: MapPin, href: '/tours' },
-    { name: 'Customers', icon: Users, href: '/customers' },
-    { name: 'Agents', icon: TrendingUp, href: '/agents' },
-    { name: 'Settings', icon: Settings, href: '/settings' },
-    { name: 'Log out', icon: LogOutIcon, href: '/logout'},
+    { name: 'Dashboard', icon: BarChart3 },
+    { name: 'Bookings', icon: Calendar },
+
+    {
+      name: 'Services',
+      icon: Layers,
+      children: [
+        { name: 'Tours', icon: Route },
+        { name: 'Land', icon: Hotel },
+        { name: 'Attractions', icon: FerrisWheel },
+        { name: 'Accommodations', icon: Bed },
+        { name: 'Car Rentals', icon: Car },
+      ],
+    },
+
+    { name: 'Customers', icon: Users },
+    { name: 'Agents', icon: TrendingUp },
+    { name: 'Settings', icon: Settings },
+    { name: 'Log out', icon: LogOutIcon },
   ];
 
-  const handleNavigation = (item: NavigationItem) => {
+
+  const handleNavigation = (itemOrName: NavigationItem | string) => {
+    const name = typeof itemOrName === 'string' ? itemOrName : itemOrName.name;
+
     if (window.innerWidth < 1024) {
       onClose();
     }
 
-    if (item.name === 'Log out') {
+    if (name === 'Log out') {
       supabase.auth.signOut().then(() => {
         window.location.href = '/';
       }).catch((error) => {
@@ -392,7 +423,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onNavigate, activeIt
       return;
     }
 
-    onNavigate(item.name);
+    onNavigate(name);
   };
 
   return (
@@ -423,22 +454,66 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onNavigate, activeIt
             </div>
           </div>
           
-          <nav className="space-y-2">
-            {navigationItems.map((item) => (
-              <button
-                key={item.name}
-                onClick={() => handleNavigation(item)}
-                className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors text-left focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-                  activeItem === item.name
-                    ? 'bg-[#154689] text-[#ffffff] border-r-2 border-[#ffffff]' 
-                    : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
-                }`}
-              >
-                <item.icon className="h-5 w-5" />
-                <span className="font-medium">{item.name}</span>
-              </button>
-            ))}
-          </nav>
+          <nav className="space-y-1">
+  {navigationItems.map((item) => {
+    // GROUP (Services)
+    if (item.children) {
+      return (
+        <div key={item.name}>
+          <button
+            onClick={() => toggleGroup(item.name)}
+            className="w-full flex items-center justify-between px-4 py-3 rounded-lg text-gray-700 hover:bg-gray-50"
+          >
+            <div className="flex items-center gap-3">
+              <item.icon className="h-5 w-5" />
+              <span className="font-medium">{item.name}</span>
+            </div>
+            <ChevronDown
+              className={`h-4 w-4 transition-transform ${
+                openGroups[item.name] ? "rotate-180" : ""
+              }`}
+            />
+          </button>
+
+          {openGroups[item.name] && (
+            <div className="ml-6 mt-1 space-y-1">
+              {item.children.map((child) => (
+                <button
+                  key={child.name}
+                  onClick={() => handleNavigation(child.name)}
+                  className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg text-sm ${
+                    activeItem === child.name
+                      ? "bg-[#154689] text-white"
+                      : "text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  <child.icon className="h-4 w-4" />
+                  {child.name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // NORMAL ITEM
+    return (
+      <button
+        key={item.name}
+        onClick={() => handleNavigation(item.name)}
+        className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg ${
+          activeItem === item.name
+            ? "bg-[#154689] text-white"
+            : "text-gray-700 hover:bg-gray-50"
+        }`}
+      >
+        <item.icon className="h-5 w-5" />
+        {item.name}
+      </button>
+    );
+  })}
+</nav>
         </div>
       </div>
     </>
@@ -769,6 +844,23 @@ const ToursView: React.FC = () => {
   return <ToursManagement />;
 };
 
+const LandArrangementsView: React.FC = () => {
+  return <LandArrangementsManagement />;
+};
+
+const AttractionsView: React.FC = () => {
+  return <AttractionsManagement />;
+};
+
+const AccommodationsView: React.FC = () => {
+  return <AccommodationsManagement />;
+}
+
+const CarRentalsView: React.FC = () => {
+  return <CarRentalsManagement />;
+}
+
+
 const CustomersView: React.FC = () => {
   return <CustomerManagement />;
 };
@@ -846,6 +938,14 @@ const Dashboard: React.FC = () => {
         return <BookingsView />;
       case 'Tours':
         return <ToursView />;
+      case 'Land':
+        return <LandArrangementsView />;       
+      case 'Attractions':
+        return <AttractionsView />; 
+      case 'Accommodations':
+        return <AccommodationsView />; 
+      case 'Car Rentals':
+        return <CarRentalsView />;
       case 'Customers':
         return <CustomersView />;
       case 'Agents':
