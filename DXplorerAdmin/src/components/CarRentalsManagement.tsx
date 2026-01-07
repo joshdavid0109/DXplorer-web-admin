@@ -6,9 +6,6 @@ import {
   X,
   Upload,
   MapPin,
-  Car,
-  DollarSign,
-  Filter,
 } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 

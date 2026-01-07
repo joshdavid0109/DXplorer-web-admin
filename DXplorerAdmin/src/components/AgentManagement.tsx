@@ -78,24 +78,6 @@ const generatePromoCode = (firstName: string, lastName: string, discountRate: nu
   return `${cleanFirstName}${lastNameCode}Explorer${discountRate}`;
 };
 
-const [managers, setManagers] = useState<Agent[]>([]);
-
-const fetchManagers = async () => {
-  const { data } = await supabase
-    .from('users')
-    .select('user_id')
-    .eq('role', 'manager');
-
-  if (!data) return setManagers([]);
-
-  // Load profiles for managers
-  const { data: profiles } = await supabase
-    .from('agents')
-    .select('*')
-    .in('user_id', data.map(u => u.user_id));
-
-  setManagers(profiles || []);
-};
 
   // Fetch agents
 const fetchAgents = async () => {
@@ -184,7 +166,6 @@ const fetchAgents = async () => {
 };
 
   useEffect(() => {
-    fetchManagers();
     fetchAgents();
   }, []);
 

@@ -468,32 +468,51 @@ const handleFileUpload = async (file: any) => {
 };
 
 
-const getImageUrl = (tour: Tour) => {
-
+const getImageUrl = (tour: Tour): string => {
   try {
-
-    // First, check if package_details exists
-    if (tour.package_details && tour.package_details.image_url) {
-      return tour.package_details.image_url;
-    } if (tour.package_details && tour.package_details.image_url) {
-      return tour.package_details.image_url;
+    if (!tour) {
+      return 'https://via.placeholder.com/400x300?text=No+Image';
     }
 
-    // Fallback to top-level image_uri or image (though they appear empty in your example)
-    if (tour.image_url) {
-        return tour.image_url;
+    // 1️⃣ package_details.image_url (ARRAY – new structure)
+    const pd = tour.package_details;
+
+    if (pd) {
+      // object form
+      if (!Array.isArray(pd) && Array.isArray(pd.image_url)) {
+        return pd.image_url.find(Boolean)
+          || 'https://via.placeholder.com/400x300?text=No+Image';
+      }
+
+      // array form
+      if (Array.isArray(pd) && pd.length > 0) {
+        for (const item of pd) {
+          if (Array.isArray(item.image_url)) {
+            const found = item.image_url.find(Boolean);
+            if (found) return found;
+          }
+        }
+      }
     }
 
-    if (tour.image_url) {
-        return tour.image_url;
+    // 2️⃣ fallback (old structure / legacy)
+    if (Array.isArray((tour as any).image_url)) {
+      return (tour as any).image_url.find(Boolean);
     }
 
-    // If no image is found in any expected location
+    if (typeof (tour as any).image_url === 'string') {
+      return (tour as any).image_url;
+    }
 
-  } catch (error) {
+    // 3️⃣ final fallback
+    return 'https://via.placeholder.com/400x300?text=No+Image';
+
+  } catch (err) {
+    console.error('getImageUrl error:', err);
     return 'https://via.placeholder.com/400x300?text=No+Image';
   }
-}
+};
+
 
 const addSideLocationInput = () => {
   setSideLocationInputs([...sideLocationInputs, '']);

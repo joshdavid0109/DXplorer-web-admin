@@ -6,9 +6,6 @@ import {
   X,
   Upload,
   MapPin,
-  Home,
-  DollarSign,
-  Filter,
 } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 
@@ -133,11 +130,6 @@ const AccommodationsManagement: React.FC = () => {
     setShowModal(true);
   };
 
-  const openEdit = (item: Accommodation) => {
-    setEditing(item);
-    setForm(item);
-    setShowModal(true);
-  };
 
   const save = async () => {
     setLoading(true);
@@ -183,9 +175,7 @@ const AccommodationsManagement: React.FC = () => {
   };
 
   /* ===================== UI ===================== */
-const isEditDisabled = false; // temporary
 
-  
 
   return (
     <div className="space-y-6">
