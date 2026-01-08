@@ -11,6 +11,7 @@ import logo from '../assets/DX.png'
 import AttractionsManagement from './AttractionsManagement.tsx';
 import AccommodationsManagement from './AccommodationsManagement.tsx';
 import CarRentalsManagement from './CarRentalsManagement.tsx';
+import SettingsPage from './SettingsView.tsx';
 
 const ROLE = {
   ADMIN: 'admin',
@@ -444,13 +445,18 @@ const navigationItems: NavigationItem[] = [
   { name: 'Log out', icon: LogOutIcon, action: 'logout' },
 ];
 
-
-
 const handleNavigation = async (item: NavigationItem) => {
   // ⛔ Do not navigate group headers
   if (item.children) return;
 
-  // 🔐 Admin restrictions only
+  // ✅ ALWAYS allow logout
+  if (item.action === 'logout') {
+    await supabase.auth.signOut();
+    window.location.replace('/');
+    return;
+  }
+
+  // 🔐 Admin restrictions
   if (
     role === ROLE.ADMIN &&
     !ADMIN_ALLOWED_VIEWS.has(item.name)
@@ -461,12 +467,6 @@ const handleNavigation = async (item: NavigationItem) => {
 
   if (window.innerWidth < 1024) {
     onClose();
-  }
-
-  if (item.action === 'logout') {
-    await supabase.auth.signOut();
-    window.location.replace('/');
-    return;
   }
 
   onNavigate(item.name);
@@ -919,12 +919,9 @@ const AgentsView: React.FC = () => {
   return <AgentManagement />;
 };
 
-const SettingsView: React.FC = () => (
-  <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-    <h2 className="text-2xl font-bold text-gray-900 mb-4">Settings</h2>
-    <p className="text-gray-600">Configure your application settings, preferences, and account details.</p>
-  </div>
-);
+const SettingsView: React.FC = () => {
+  return <SettingsPage />
+};
 
 
 // Main Dashboard Component with Supabase Integration
