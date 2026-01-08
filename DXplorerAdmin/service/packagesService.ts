@@ -2,7 +2,6 @@ import { supabase } from '../lib/supabase'
 import type { Database } from '../lib/types'
 
 type Package = Database['public']['Tables']['packages']['Row']
-type PackageDate = Database['public']['Tables']['package_dates']['Row']
 type PackageDetail = Database['public']['Tables']['package_details']['Row']
 
 // Extended package type with joined data

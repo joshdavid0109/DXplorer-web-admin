@@ -584,10 +584,7 @@ const handleEditTour = (tour: Tour) => {
     }
   };
 
-  // 1️⃣ Open confirmation modal only
-const handleSubmit = () => {
-  setShowConfirmModal(true);
-};
+
 
 // 2️⃣ ACTUAL save happens here
 const handleConfirmedSave = async () => {

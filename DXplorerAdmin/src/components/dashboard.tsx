@@ -399,7 +399,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onNavigate, activeIt
     Services: true,
   });
 
-  const isAdmin = role === ROLE.ADMIN;
   const isSuperAdmin = role === ROLE.SUPERADMIN;
 
 
