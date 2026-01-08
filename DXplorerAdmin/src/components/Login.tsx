@@ -47,10 +47,11 @@ const AuthComponent = () => {
             .eq('user_id', data.user.id)
             .single();
           
-          if (userError || userData?.role !== 'admin') {
-            await supabase.auth.signOut(); // Sign out non-admin user
+          if (userError || (userData?.role !== 'admin' && userData?.role !== 'superadmin')) {
+            await supabase.auth.signOut();
             throw new Error('Access denied. Admin privileges required.');
           }
+
         } else {
           const { error } = await supabase.auth.signUp({ email, password });
           if (error) throw error;
@@ -181,7 +182,7 @@ const App = () => {
       if (error) {
         console.error('Role check error:', error);
         setUser(session.user); // Allow access on error
-      } else if (userData?.role !== 'admin') {
+      } else if (userData?.role !== 'admin' && userData?.role !== 'superadmin') {
         await supabase.auth.signOut();
         setUser(null);
       } else {

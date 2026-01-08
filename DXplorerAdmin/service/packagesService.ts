@@ -8,7 +8,13 @@ type PackageDetail = Database['public']['Tables']['package_details']['Row']
 // Extended package type with joined data
 export interface ExtendedPackage extends Omit<Package, 'itinerary' | 'side_locations' | 'inclusions' | 'available_dates'> {
   package_id: string
-  available_dates: PackageDate[]
+  package_availability: {
+    id: string
+    package_id: string
+    start_date: string
+    end_date: string
+    remaining_slots: number
+  }[]
   package_details: PackageDetail | null
   itinerary: string | null
   side_locations: any[] | null
@@ -380,154 +386,79 @@ export const packagesService = {
     }
   },
 
-updatePackage: async (id: number, packageData: any): Promise<ExtendedPackage> => {
+updatePackage: async (packageId: string, packageData: any) => {
   try {
-    // 1. Fetch current data
-    const { data: currentData, error: currentError } = await supabase
-      .from('packages')
-      .select(`
-        *,
-        package_details (
-          detail_id,
-          itinerary,
-          side_locations,
-          inclusions,
-          image_url
-        ),
-        package_dates (
-          date_id,
-          available_Date
-        )
-      `)
-      .eq('package_id', id)
-      .single();
-    if (currentError) throw new Error(`Failed to fetch current package: ${currentError.message}`);
+    /* ===============================
+       1. UPDATE packages (NO image_url)
+    ================================ */
+    const { error: pkgError } = await supabase
+      .from("packages")
+      .update({
+        main_location: packageData.destination,
+        price: packageData.price,
+        duration: packageData.duration,
+        nights: packageData.nights,
+        status: packageData.status,
+        tour_type: packageData.tour_type,
+      })
+      .eq("package_id", packageId);
 
-    // 2. Check and update only changed fields (packages table)
-    const updates: any = {};
-    const fieldsToCheck = ['main_location', 'price', 'duration', 'nights', 'status', 'tour_type'];
-    for (const field of fieldsToCheck) {
-      if (packageData[field] !== undefined && packageData[field] !== currentData[field]) {
-        updates[field] = packageData[field];
-        console.log(`Field ${field} changed from ${currentData[field]} to ${packageData[field]}`);
-      }
-    }
-    if (Object.keys(updates).length > 0) {
-      const { error: packageError } = await supabase
-        .from('packages')
-        .update(updates)
-        .eq('package_id', id);
-      if (packageError) throw new Error(`Failed to update package: ${packageError.message}`);
-    }
+    if (pkgError) throw pkgError;
 
-    // 3. Update package_details only if changed
-    const currentDetails = currentData.package_details || {};
-    const detailUpdates: any = {};
-    if (packageData.itinerary !== undefined && packageData.itinerary !== currentDetails.itinerary) {
-      detailUpdates.itinerary = packageData.itinerary;
-    }
-    if (packageData.side_locations && JSON.stringify(packageData.side_locations) !== JSON.stringify(currentDetails.side_locations)) {
-      detailUpdates.side_locations = packageData.side_locations;
-    }
-    if (packageData.inclusions && JSON.stringify(packageData.inclusions) !== JSON.stringify(currentDetails.inclusions)) {
-      detailUpdates.inclusions = packageData.inclusions;
-    }
-    if (packageData.image_url !== undefined && packageData.image_url !== currentDetails.image_url) {
-      detailUpdates.image_url = packageData.image_url;
-    }
-    if (Object.keys(detailUpdates).length > 0 || !currentData.package_details) {
-      detailUpdates.package_id = id;
-      const { error: detailsError } = await supabase
-        .from('package_details')
-        .upsert(detailUpdates, { onConflict: 'package_id' });
-      if (detailsError) throw new Error(`Failed to update package details: ${detailsError.message}`);
-    }
+    /* ===============================
+       2. UPSERT package_details (IMAGE GOES HERE)
+    ================================ */
+    const { error: detailsError } = await supabase
+      .from("package_details")
+      .upsert(
+        {
+          package_id: packageId,
+          itinerary: packageData.itinerary || "",
+          side_locations: packageData.side_locations || [],
+          inclusions: packageData.inclusions || [],
+          image_url: packageData.image_url
+            ? Array.isArray(packageData.image_url)
+              ? packageData.image_url
+              : [packageData.image_url]
+            : [],
+        },
+        { onConflict: "package_id" }
+      );
 
-    // 4. Update package_dates - handle both additions and deletions
-    const newDates = packageData.available_dates;
-    if (newDates !== undefined) { // Only update if available_dates is provided
-      const currentPackageDates = currentData.package_dates;
-      
-      if (currentPackageDates && currentPackageDates.length > 0) {
-        // If package_dates row exists, compare and update the entire array
-        const currentDateRow = currentPackageDates[0]; // Assuming one row per package
-        const existingDates = currentDateRow.available_Date || [];
-        
-        // Normalize dates for comparison
-        const normalizeDate = (date: any) => typeof date === 'string' ? date : JSON.stringify(date);
-        const existingDateStrings = existingDates.map(normalizeDate);
-        const newDateStrings = newDates.map(normalizeDate);
-        
-        // Check if arrays are different (either different length or different content)
-        const arraysAreDifferent = existingDateStrings.length !== newDateStrings.length ||
-          !existingDateStrings.every((date: any) => newDateStrings.includes(date)) ||
-          !newDateStrings.every((date: any) => existingDateStrings.includes(date));
-        
-        if (arraysAreDifferent) {
-          if (newDates.length === 0) {
-            // If new dates array is empty, delete the package_dates row
-            const { error: deleteError } = await supabase
-              .from('package_dates')
-              .delete()
-              .eq('package_id', id);
-            if (deleteError) throw new Error(`Failed to delete package dates: ${deleteError.message}`);
-          } else {
-            // Update with the new dates array (this handles both additions and deletions)
-            const { error: updateError } = await supabase
-              .from('package_dates')
-              .update({ available_Date: newDates })
-              .eq('package_id', id);
-            if (updateError) throw new Error(`Failed to update package dates: ${updateError.message}`);
-          }
-        }
-      } else {
-        // If no package_dates row exists and we have new dates, create new one
-        if (newDates.length > 0) {
-          const { error: insertError } = await supabase
-            .from('package_dates')
-            .insert({
-              package_id: id,
-              available_Date: newDates
-            });
-          if (insertError) throw new Error(`Failed to insert new package dates: ${insertError.message}`);
-        }
+    if (detailsError) throw detailsError;
+
+    /* ===============================
+       3. REPLACE package_dates
+    ================================ */
+    await supabase
+      .from("package_dates")
+      .delete()
+      .eq("package_id", packageId);
+
+    if (Array.isArray(packageData.available_dates)) {
+      const rows = packageData.available_dates.map((d: any) => ({
+        package_id: packageId,
+        available_Date: [
+          {
+            start: d.start,
+            end: d.end,
+            remaining_slots: d.remaining_slots,
+          },
+        ],
+      }));
+
+      if (rows.length) {
+        const { error } = await supabase
+          .from("package_dates")
+          .insert(rows);
+        if (error) throw error;
       }
     }
 
-    // 5. Fetch and return updated package
-    const { data: finalData, error: fetchError } = await supabase
-      .from('packages')
-      .select(`
-        *,
-        package_dates (
-          date_id,
-          available_Date
-        ),
-        package_details (
-          detail_id,
-          itinerary,
-          side_locations,
-          inclusions,
-          image_url
-        )
-      `)
-      .eq('package_id', id)
-      .single();
-    if (fetchError) throw new Error(`Failed to fetch updated package: ${fetchError.message}`);
-
-    const details = finalData.package_details || {};
-    return {
-      ...finalData,
-      available_dates: finalData.package_dates || [],
-      itinerary: details.itinerary || '',
-      side_locations: details.side_locations || [],
-      inclusions: details.inclusions || [],
-      image_url: details.image_url || '',
-      package_details: details
-    };
-  } catch (error) {
-    console.error('Service error:', error);
-    throw error;
+    return true;
+  } catch (err) {
+    console.error("❌ updatePackage failed:", err);
+    throw err;
   }
 },
 

@@ -12,6 +12,23 @@ import AttractionsManagement from './AttractionsManagement.tsx';
 import AccommodationsManagement from './AccommodationsManagement.tsx';
 import CarRentalsManagement from './CarRentalsManagement.tsx';
 
+const ROLE = {
+  ADMIN: 'admin',
+  SUPERADMIN: 'superadmin',
+};
+
+const ADMIN_ALLOWED_VIEWS = new Set([
+  'Dashboard',
+  'Tours',
+  'Land',
+  'Attractions',
+  'Accommodations',
+  'Car Rentals',
+  'Services',
+  'Settings',
+]);
+
+
 // Types
 interface BookingData {
   name: string;
@@ -53,6 +70,8 @@ interface NavigationItem {
   name: string;
   icon: React.ComponentType<{ className?: string }>;
   children?: NavigationItem[];
+    action?: 'logout';
+
 }
 
 
@@ -61,6 +80,7 @@ interface SidebarProps {
   onClose: () => void;
   onNavigate: (itemName: string) => void;
   activeItem: string;
+  role: string | null;
 }
 
 interface DashboardStats {
@@ -76,6 +96,7 @@ interface DashboardStats {
 
 type TimePeriod = '7d' | '30d' | '90d' | '1y';
 
+
 // Custom hooks for data fetching
 const useDashboardStats = () => {
   const [stats, setStats] = useState<DashboardStats>({
@@ -90,6 +111,8 @@ const useDashboardStats = () => {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -371,10 +394,14 @@ const useTourDistribution = () => {
 };
 
 // Enhanced Sidebar Component with Navigation (unchanged)
-const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onNavigate, activeItem }) => {
+const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onNavigate, activeItem, role }) => {
     const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
     Services: true,
   });
+
+  const isAdmin = role === ROLE.ADMIN;
+  const isSuperAdmin = role === ROLE.SUPERADMIN;
+
 
 
   const toggleGroup = (name: string) => {
@@ -384,47 +411,71 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onNavigate, activeIt
     }));
   };
 
-  const navigationItems: NavigationItem[] = [
-    { name: 'Dashboard', icon: BarChart3 },
-    { name: 'Bookings', icon: Calendar },
+const navigationItems: NavigationItem[] = [
+  { name: 'Dashboard', icon: BarChart3 },
 
-    {
-      name: 'Services',
-      icon: Layers,
-      children: [
-        { name: 'Tours', icon: Route },
-        { name: 'Land', icon: Hotel },
-        { name: 'Attractions', icon: FerrisWheel },
-        { name: 'Accommodations', icon: Bed },
-        { name: 'Car Rentals', icon: Car },
-      ],
-    },
+  // 🔒 Bookings — SUPERADMIN ONLY
+  ...(isSuperAdmin ? [{ name: 'Bookings', icon: Calendar }] : []),
 
-    { name: 'Customers', icon: Users },
-    { name: 'Agents', icon: TrendingUp },
-    { name: 'Settings', icon: Settings },
-    { name: 'Log out', icon: LogOutIcon },
-  ];
+  // ✅ Services — BOTH admin & superadmin
+  {
+    name: 'Services',
+    icon: Layers,
+    children: [
+      { name: 'Tours', icon: Route },
+      { name: 'Land', icon: Hotel },
+      { name: 'Attractions', icon: FerrisWheel },
+      { name: 'Accommodations', icon: Bed },
+      { name: 'Car Rentals', icon: Car },
+    ],
+  },
+
+  // 🔒 Customers & Agents — SUPERADMIN ONLY
+  ...(isSuperAdmin
+    ? [
+        { name: 'Customers', icon: Users },
+        { name: 'Agents', icon: TrendingUp },
+      ]
+    : []),
+
+  // ✅ Settings — BOTH
+  { name: 'Settings', icon: Settings },
+
+  // ✅ Logout — BOTH
+  { name: 'Log out', icon: LogOutIcon, action: 'logout' },
+];
 
 
-  const handleNavigation = (itemOrName: NavigationItem | string) => {
-    const name = typeof itemOrName === 'string' ? itemOrName : itemOrName.name;
 
-    if (window.innerWidth < 1024) {
-      onClose();
-    }
+const handleNavigation = async (item: NavigationItem) => {
+  // ⛔ Do not navigate group headers
+  if (item.children) return;
 
-    if (name === 'Log out') {
-      supabase.auth.signOut().then(() => {
-        window.location.href = '/';
-      }).catch((error) => {
-        console.error('Logout failed:', error);
-      });
-      return;
-    }
+  // 🔐 Admin restrictions only
+  if (
+    role === ROLE.ADMIN &&
+    !ADMIN_ALLOWED_VIEWS.has(item.name)
+  ) {
+    console.warn(`Admin blocked from accessing: ${item.name}`);
+    return;
+  }
 
-    onNavigate(name);
-  };
+  if (window.innerWidth < 1024) {
+    onClose();
+  }
+
+  if (item.action === 'logout') {
+    await supabase.auth.signOut();
+    window.location.replace('/');
+    return;
+  }
+
+  onNavigate(item.name);
+};
+
+
+
+
 
   return (
     <>
@@ -480,7 +531,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onNavigate, activeIt
               {item.children.map((child) => (
                 <button
                   key={child.name}
-                  onClick={() => handleNavigation(child.name)}
+                  onClick={() => handleNavigation(child)}
                   className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg text-sm ${
                     activeItem === child.name
                       ? "bg-[#154689] text-white"
@@ -501,7 +552,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onNavigate, activeIt
     return (
       <button
         key={item.name}
-        onClick={() => handleNavigation(item.name)}
+        onClick={() => handleNavigation(item)}
         className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg ${
           activeItem === item.name
             ? "bg-[#154689] text-white"
@@ -882,6 +933,89 @@ const Dashboard: React.FC = () => {
   const [selectedPeriod, setSelectedPeriod] = useState<TimePeriod>('7d');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [currentView, setCurrentView] = useState<string>('Dashboard');
+  const [authReady, setAuthReady] = useState(false);
+  const [userRole, setUserRole] = useState<string | null>(null);
+  useEffect(() => {
+  supabase.auth.getSession().then(({ data }) => {
+    console.log('SESSION CHECK:', data.session);
+  });
+}, []);
+
+
+useEffect(() => {
+  let mounted = true;
+
+  const init = async () => {
+    const { data } = await supabase.auth.getSession();
+
+    if (!mounted) return;
+
+    if (data.session) {
+      setAuthReady(true);
+    }
+  };
+
+  init();
+
+  const { data: { subscription } } = supabase.auth.onAuthStateChange(
+    (event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        setAuthReady(true);
+      }
+
+      if (event === 'SIGNED_OUT') {
+        setAuthReady(false);
+        setUserRole(null);
+      }
+    }
+  );
+
+  return () => {
+    mounted = false;
+    subscription.unsubscribe();
+  };
+}, []);
+
+
+useEffect(() => {
+  if (!authReady) return;
+
+  let mounted = true;
+
+  const loadRole = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      setUserRole(null);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('users')
+      .select('role')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (!mounted) return;
+
+    if (error) {
+      console.error('Role fetch error:', error);
+      setUserRole(null);
+      return;
+    }
+
+    setUserRole(data?.role || null);
+  };
+
+  loadRole();
+
+  return () => {
+    mounted = false;
+  };
+}, [authReady]);
+
+
+
 
   // Use custom hooks for data fetching
   const { stats, loading: statsLoading, error: statsError } = useDashboardStats();
@@ -889,6 +1023,23 @@ const Dashboard: React.FC = () => {
   const { bookings: recentBookings, loading: bookingsLoading } = useRecentBookings(5);
   const { tours: topTours, loading: toursLoading } = useTopTours(5);
   const { data: tourDistribution, loading: distributionLoading } = useTourDistribution();
+    if (!authReady) {
+  return (
+    <div className="flex h-screen items-center justify-center text-gray-500">
+      Initializing secure session…
+    </div>
+  );
+}
+
+
+    if (userRole === null) {
+    return (
+      <div className="flex h-screen items-center justify-center text-gray-500">
+        Loading dashboard…<br />
+        <span className="text-xs">(Checking permissions)</span>
+      </div>
+    );
+  }
 
   // Navigation handler
   const handleNavigation = (viewName: string) => {
@@ -1056,6 +1207,7 @@ const Dashboard: React.FC = () => {
         onClose={() => setSidebarOpen(false)}
         onNavigate={handleNavigation}
         activeItem={currentView}
+        role={userRole}
       />
 
       {/* Main Content */}

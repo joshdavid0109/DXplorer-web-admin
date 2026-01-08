@@ -8,3 +8,19 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 // Test connection
 console.log('Supabase client created:', supabase)
 console.log('Supabase URL:', supabaseUrl)
+
+// 🔍 DEBUG: log every Supabase request
+const originalFetch = window.fetch;
+
+window.fetch = async (...args) => {
+  const [url, options] = args;
+
+  if (typeof url === 'string' && url.includes('supabase.co')) {
+    console.log('🌐 SUPABASE REQUEST:', {
+      url,
+      headers: options?.headers,
+    });
+  }
+
+  return originalFetch(...args);
+};
