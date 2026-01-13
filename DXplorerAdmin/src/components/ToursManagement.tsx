@@ -610,6 +610,22 @@ const handleConfirmedSave = async () => {
   }
 };
 
+const validateFile = (file: File) => {
+  const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+  const maxSize = 5 * 1024 * 1024; // 5MB
+
+  if (!validTypes.includes(file.type)) {
+    return 'Invalid file type. Only JPG, PNG, GIF, WebP allowed.';
+  }
+
+  if (file.size > maxSize) {
+    return 'File size must be less than 5MB.';
+  }
+
+  return null;
+};
+
+
 
 
   // const handleArrayInput = (value: string, field: 'side_locations' | 'inclusions') => {

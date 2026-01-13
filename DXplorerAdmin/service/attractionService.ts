@@ -197,7 +197,7 @@ export const attractionService = {
         country: payload.country,
         category: payload.category,
         price: payload.price,
-        image_urls: payload.image_urls || [],
+        image_url: payload.image_url || [],
         status: payload.status || "archived",
       })
       .select()
@@ -224,7 +224,7 @@ export const attractionService = {
         country: payload.country,
         category: payload.category,
         price: payload.price,
-        image_urls: payload.image_urls,
+        image_url: payload.image_url,
         status: payload.status,
       })
       .eq("attraction_id", attraction_id)

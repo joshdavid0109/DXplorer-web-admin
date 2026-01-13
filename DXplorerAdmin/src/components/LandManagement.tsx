@@ -63,34 +63,79 @@ const LandArrangementsManagement: React.FC = () => {
 
   /* ===================== IMAGE UPLOAD ===================== */
 
-  const uploadImage = async (file: File) => {
-    const fileName = `${Date.now()}-${file.name}`;
-    const { error } = await supabase.storage
-      .from("land-arrangements")
-      .upload(fileName, file);
+const validateFile = (file: File) => {
+  const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+  const maxSize = 5 * 1024 * 1024; // 5MB
 
-    if (error) throw error;
+  if (!validTypes.includes(file.type)) {
+    alert('Invalid file type. Only JPG, PNG, GIF, WebP allowed.');
+    return false;
+  }
 
-    const { data } = supabase.storage
-      .from("land-arrangements")
-      .getPublicUrl(fileName);
+  if (file.size > maxSize) {
+    alert('File size must be less than 5MB.');
+    return false;
+  }
 
-    return data.publicUrl;
-  };
+  return true;
+};
+
+const uploadImage = async (file: File) => {
+  if (!validateFile(file)) return null;
+
+  const filePath = `land-arrangements/${Date.now()}-${file.name}`;
+
+  const { error } = await supabase.storage
+    .from("images") // ✅ SAME BUCKET AS WORKING MODULES
+    .upload(filePath, file, {
+      cacheControl: "3600",
+      upsert: false,
+    });
+
+  if (error) {
+    console.error("Upload error:", error);
+    alert(error.message);
+    return null;
+  }
+
+  const { data } = supabase.storage
+    .from("images")
+    .getPublicUrl(filePath);
+
+  return data.publicUrl;
+};
+
 
   const handleFiles = async (files: FileList | File[]) => {
-    const uploaded: string[] = [];
+  if (!files.length) return;
+
+  setIsSubmitting(true);
+
+  try {
+    const uploadedUrls: string[] = [];
 
     for (const file of Array.from(files)) {
       const url = await uploadImage(file);
-      uploaded.push(url);
+      if (url) uploadedUrls.push(url);
     }
 
-    setForm((prev) => ({
-      ...prev,
-      image_url: [...(prev.image_url || []), ...uploaded],
-    }));
-  };
+    if (uploadedUrls.length > 0) {
+      setForm(prev => ({
+        ...prev,
+        image_url: [...(prev.image_url || []), ...uploadedUrls],
+      }));
+    }
+  } catch (err) {
+    console.error("Upload failed:", err);
+  } finally {
+    setIsSubmitting(false);
+  }
+};
+
+
+  
+
+  
 
   /* ===================== ACTIONS ===================== */
 
@@ -107,6 +152,8 @@ const LandArrangementsManagement: React.FC = () => {
   };
 
   const save = async () => {
+    console.log("FINAL PAYLOAD TO DB:", form);
+
     if (!form.title || !form.price) return;
     setIsSubmitting(true);
 

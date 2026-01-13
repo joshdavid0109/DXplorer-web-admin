@@ -149,8 +149,29 @@ export const landService = {
 createLandArrangement: (data: any) =>
 supabase.from("land_arrangements").insert(data),
 
-updateLandArrangement: (id: any, data: any) =>
-supabase.from("land_arrangements").update(data).eq("land_id", id),
+updateLandArrangement: async (id: string, data: any) => {
+  const payload = {
+    title: data.title,
+    description: data.description,
+    price: data.price,
+    service_type: data.service_type,
+    pricing_type: data.pricing_type,
+    status: data.status,
+
+    // 🔥 FIX HERE — match DB column name
+    image_url: data.image_url ?? [],
+  };
+
+  console.log("UPDATE PAYLOAD:", payload);
+
+  return await supabase
+    .from("land_arrangements")
+    .update(payload)
+    .eq("land_id", id)
+    .select()
+    .single();
+},
+
 
 deleteLandArrangement: (id: any) =>
 supabase.from("land_arrangements").delete().eq("land_id", id),

@@ -66,36 +66,88 @@ const AttractionsManagement: React.FC = () => {
     setItems(data || []);
   };
 
+  const validateFile = (file: File) => {
+  const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+  const maxSize = 5 * 1024 * 1024; // 5MB
+
+  if (!validTypes.includes(file.type)) {
+    return 'Invalid file type. Only JPG, PNG, GIF, WebP allowed.';
+  }
+
+  if (file.size > maxSize) {
+    return 'File size must be less than 5MB.';
+  }
+
+  return null;
+};
+
+
   /* ===================== IMAGE UPLOAD ===================== */
 
-  const uploadImage = async (file: File) => {
-    const fileName = `${Date.now()}-${file.name}`;
-    const { error } = await supabase.storage
-      .from("attractions")
-      .upload(fileName, file);
+const uploadImage = async (file: File) => {
+  const validationError = validateFile(file);
+  if (validationError) {
+    alert(validationError);
+    return null;
+  }
 
-    if (error) throw error;
+  const filePath = `attractions/${Date.now()}-${file.name}`;
 
-    const { data } = supabase.storage
-      .from("attractions")
-      .getPublicUrl(fileName);
+  const { error: uploadError } = await supabase.storage
+    .from('images') // ✅ SAME bucket as Tours
+    .upload(filePath, file, {
+      cacheControl: '3600',
+      upsert: false,
+    });
 
-    return data.publicUrl;
-  };
+  if (uploadError) {
+    console.error('Supabase upload error:', uploadError);
+    alert(uploadError.message);
+    return null;
+  }
 
-  const handleFiles = async (files: FileList | File[]) => {
-    const uploaded: string[] = [];
+  const { data } = supabase.storage
+    .from('images')
+    .getPublicUrl(filePath);
+
+  return data.publicUrl;
+};
+
+
+
+const handleFiles = async (files: FileList | File[]) => {
+  if (!files.length) return;
+
+  setIsSubmitting(true);
+
+  try {
+    const uploadedUrls: string[] = [];
 
     for (const file of Array.from(files)) {
-      const url = await uploadImage(file);
-      uploaded.push(url);
+      const imageUrl = await uploadImage(file);
+      if (imageUrl) {
+        uploadedUrls.push(imageUrl);
+      }
     }
 
-    setForm((prev) => ({
-      ...prev,
-      image_url: [...(prev.image_url || []), ...uploaded],
-    }));
-  };
+    // ✅ SINGLE state update (this is the fix)
+    if (uploadedUrls.length > 0) {
+      setForm(prev => ({
+        ...prev,
+        image_url: [...(prev.image_url || []), ...uploadedUrls],
+      }));
+    }
+
+  } catch (err) {
+    console.error("Upload failed:", err);
+  } finally {
+    setIsSubmitting(false);
+  }
+};
+
+
+
+
 
   /* ===================== ACTIONS ===================== */
 
@@ -113,7 +165,7 @@ const AttractionsManagement: React.FC = () => {
 
   const save = async () => {
     if (!form.title || !form.price) return;
-    setIsSubmitting(true);
+    setIsSubmitting(true); 
 
     try {
       if (editing) {
@@ -317,20 +369,21 @@ const AttractionsManagement: React.FC = () => {
                 <div
                   onDragOver={(e) => {
                     e.preventDefault();
-                    setIsDragging(true);
+                    if (!isSubmitting) setIsDragging(true);
                   }}
                   onDragLeave={() => setIsDragging(false)}
                   onDrop={(e) => {
                     e.preventDefault();
                     setIsDragging(false);
-                    handleFiles(e.dataTransfer.files);
+                    if (!isSubmitting) handleFiles(e.dataTransfer.files);
                   }}
-                  onClick={() => fileInputRef.current?.click()}
-                  className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer ${
-                    isDragging
-                      ? "border-blue-500 bg-blue-50"
-                      : "border-gray-300"
-                  }`}
+                  onClick={() => {
+                    if (!isSubmitting) fileInputRef.current?.click();
+                  }}
+                  className={`border-2 border-dashed rounded-xl p-6 text-center transition
+                    ${isSubmitting ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}
+                    ${isDragging ? "border-blue-500 bg-blue-50" : "border-gray-300"}
+                  `}
                 >
                   <Upload className="mx-auto mb-2 text-gray-400" />
                   <p className="text-sm text-gray-600">
@@ -354,6 +407,9 @@ const AttractionsManagement: React.FC = () => {
                       <div key={idx} className="relative group">
                         <img
                           src={img}
+                          onError={(e) => {
+                            e.currentTarget.src = "/placeholder.jpg";
+                          }}
                           className="h-24 w-full object-cover rounded-lg"
                         />
                         <button
